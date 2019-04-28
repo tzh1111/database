@@ -24,9 +24,8 @@ int ReadFourBytes(unsigned char *addr)
 
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
 {//从result写到RBLK
-    printf("blocksize:%d",buf->blkSize);
-    *(result+56)=(*RBLK)+1;//后续地址
-    if(writeBlockToDisk(result,*(RBLK),&buf)!=0)
+   // printf("blocksize:%d",buf->blkSize);
+    if(writeBlockToDisk(result,*(RBLK),buf)!=0)
     {
         perror("Writing Block Failed!\n");
         return -1;
@@ -50,7 +49,8 @@ int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
 	for (int i = 0; i < turn; ++i)
 	{
 	    S_next=20;
-		for (int j = 0; j<6&&R_next!=0; ++j)
+	    int j=0;
+		for (; j<6&&R_next!=0; ++j)
 		{
 		    //WHERE READ FROM DISK,
 		    //AUTOMATICALLY GET NEW BLK FROM BUF
@@ -62,13 +62,13 @@ int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
             }
             R_next=ReadFourBytes(bufblkr[j]+56);
 		}
-
+		printf("\nj:%d\n",j);
 		while(S_next!=0)
         {
             printf("S-next:%d\n",S_next);
             bufblks=readBlockFromDisk(S_next,buf);
             S_next=ReadFourBytes(bufblks+56);
-            for(int r=0;r<6;r++)
+            for(int r=0;r<j;r++)
             {
                 for(int ri=0;ri<7;ri++)
                 {
@@ -82,7 +82,7 @@ int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
                      //   printf("\nC:%d,D:%d\n",C,D);
                         if(A==C&&B==D)
                         {
-                            printf("\ncache!r:%d,si:%d,____%d,%d\n",r,si,A,B);
+                            printf("\ncache!r:%d,si:%d,____%d,%d,%d,%d\n",r,si,A,B,C,D);
                             temp[temp_count].a=A;
                             temp[temp_count].b=B;
                             temp[temp_count].fsttmmatch=0;
@@ -112,6 +112,8 @@ int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
 	//最后存
 	if(resultp!=0)
     {
+        for(int t=0;resultp+t<buf->blkSize;t++)
+            *(result+resultp+t)=0;//stuff with 0(ascii)
         RBLK=ReLoadResult(buf,result,&RBLK);
         resultp=0;
     }
@@ -189,6 +191,6 @@ int main()
     }
     temp=(TempArray *)malloc(sizeof(TempArray)*1000);
 	AND(&buf,temp);
-	printf("io次数：%l",buf->numIO);
+	//printf("io次数：%l",buf->numIO);
 	return 0;
 }

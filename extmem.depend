@@ -46,14 +46,14 @@
 	<stdio.h>
 	"extmem.h"
 
-1556442494 source:c:\users\cosmos2001\desktop\lab4\extmem-c\extmem.c
+1556449445 source:c:\users\cosmos2001\desktop\lab4\extmem-c\extmem.c
 	<stdlib.h>
 	<stdio.h>
 	"extmem.h"
 
 1308709046 c:\users\cosmos2001\desktop\lab4\extmem-c\extmem.h
 
-1556443909 source:c:\users\cosmos2001\desktop\lab4\extmem-c\test.c
+1556454965 source:c:\users\cosmos2001\desktop\lab4\extmem-c\test.c
 	<stdio.h>
 	<stdlib.h>
 	"extmem.h"
