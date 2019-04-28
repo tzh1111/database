@@ -142,10 +142,11 @@ int writeBlockToDisk(unsigned char *blkPtr, unsigned int addr, Buffer *buf)
         perror("Writing Block Failed!\n");
         return -1;
     }
-
+    printf("write to blk:%d\n---------\n",addr);
     for (bytePtr = blkPtr; bytePtr < blkPtr + buf->blkSize; bytePtr++)
         //fputc((int)(*bytePtr), fp);
-        fputc((*bytePtr), fp);
+        {printf("%c",*bytePtr);fputc((*bytePtr), fp);}
+    printf("\n-----------\n");
     fclose(fp);
     *(blkPtr - 1) = BLOCK_AVAILABLE;
     buf->numFreeBlk++;
