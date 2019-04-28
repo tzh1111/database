@@ -13,12 +13,12 @@ int temp_count=0;
 
 int ReadFourBytes(unsigned char *addr)
 {
-    char temp[4];
+    char tempbyte[4];
     for(int m=0;m<4;m++)
     {
-        temp[m]=*(addr+m);
+        tempbyte[m]=*(addr+m);
     }
-    int r=atoi(temp);
+    int r=atoi(tempbyte);
     return r;
 }
 
@@ -36,7 +36,7 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     return *RBLK;
 }
 
-int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
+int AND(Buffer *buf,TempArray *temp){
     temp_count=0;
 	const int turn=(16%6==0)?16/6:16/6+1;
 	unsigned char *bufblkr[10],*bufblks, *result;
@@ -121,12 +121,15 @@ int AND(Buffer *buf,TempArray *temp){//交，尚不能写回文件
 
 int cha(Buffer *buf,TempArray *temp)
 {
+    int cnt=0;
     AND(buf,temp);
     int R_next=1;
     int A,B,flag;
     int turn=(16%7==0)?16/7:16/7+1;
-    unsigned char *result,bufblkr[10];
+    unsigned char *result,*bufblkr[10];
 	unsigned int resultp=0,RBLK=2222;
+	result=getNewBlockInBuffer(buf);
+	printf("\nR-S\n");
     for(int r=0;r<turn;r++)
     {
         for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
@@ -142,8 +145,8 @@ int cha(Buffer *buf,TempArray *temp)
             R_next=ReadFourBytes(bufblkr[j]+56);
             for(int ri=0;ri<7;ri++)
             {
-                A=ReadFourBytes(bufblkr[r]+ri*8);
-                B=ReadFourBytes(bufblkr[r]+ri*8+4);
+                A=ReadFourBytes(bufblkr[j]+ri*8);
+                B=ReadFourBytes(bufblkr[j]+ri*8+4);
                 for(int i=0;i<temp_count;i++)
                 {
                     flag=0;
@@ -157,10 +160,14 @@ int cha(Buffer *buf,TempArray *temp)
                 if(flag==0)
                 {
                     //writetupletoblk;
-                    *(result+resultp)=A;
+                    for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(bufblkr[j]+ri*8+m);
+                    //*(result+resultp)=*(bufblkr[r]+ri*8);
                     resultp+=4;
-                    *(result+resultp)=B;
+                    for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(bufblkr[j]+ri*8+4+m);
                     resultp+=4;
+                   // printf("\nA:%s\nB:%s",*(result+resultp-8),*(result+resultp-4));
                     if(resultp==56)//满64写回，后继块地址呢？
                     {
                         RBLK=ReLoadResult(buf,result,&RBLK);
@@ -169,13 +176,86 @@ int cha(Buffer *buf,TempArray *temp)
                 }
             }
         }
+        for(int f=0;f<7;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
     }
+    if(resultp!=0)
+    {
+        for(int t=0;resultp+t<buf->blkSize;t++)
+            *(result+resultp+t)=0;//stuff with 0(ascii)
+        RBLK=ReLoadResult(buf,result,&RBLK);
+        resultp=0;
+    }
+
 
    // for(blk in S)
         //the same as Rs
-
-    RBLK=ReLoadResult(buf,result,&RBLK);
-	resultp=0;
+    RBLK=3333;
+    R_next=20;
+    resultp=0;
+    turn=(32%7==0)?32/7:32/7+1;
+    printf("\nR-S\n");
+    for(int r=0;r<turn;r++)
+    {
+        for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
+        {
+            //WHERE READ FROM DISK,
+            //AUTOMATICALLY GET NEW BLK FROM BUF
+            printf("S_next:%d\n",R_next);
+            if((bufblkr[j]=readBlockFromDisk(R_next,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            R_next=ReadFourBytes(bufblkr[j]+56);
+            for(int ri=0;ri<7;ri++)
+            {
+                A=ReadFourBytes(bufblkr[j]+ri*8);
+                B=ReadFourBytes(bufblkr[j]+ri*8+4);
+                for(int i=0;i<temp_count;i++)
+                {
+                    flag=0;
+                    if(temp[i].a==A&&temp[i].b==B&&temp[i].fsttmmatch==0)
+                    {
+                        temp[i].fsttmmatch=1;
+                        flag=1;//no write
+                        break;
+                    }
+                }
+                if(flag==0)
+                {
+                    //writetupletoblk;
+                    for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(bufblkr[j]+ri*8+m);
+                    //*(result+resultp)=*(bufblkr[r]+ri*8);
+                    resultp+=4;
+                    for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(bufblkr[j]+ri*8+4+m);
+                    resultp+=4;
+                   // printf("\nA:%s\nB:%s",*(result+resultp-8),*(result+resultp-4));
+                    if(resultp==56)//满64写回，后继块地址呢？
+                    {
+                        RBLK=ReLoadResult(buf,result,&RBLK);
+                        resultp=0;
+                    }
+                }
+            }
+        }
+        for(int f=0;f<7;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
+    }
+    if(resultp!=0)
+    {
+        for(int t=0;resultp+t<buf->blkSize;t++)
+            *(result+resultp+t)=0;//stuff with 0(ascii)
+        RBLK=ReLoadResult(buf,result,&RBLK);
+        resultp=0;
+    }
+	printf("\n-------%d--------\n",cnt);
 
 }
 
@@ -190,7 +270,7 @@ int main()
         return -1;
     }
     temp=(TempArray *)malloc(sizeof(TempArray)*1000);
-	AND(&buf,temp);
+	cha(&buf,temp);
 	//printf("io次数：%l",buf->numIO);
 	return 0;
 }
