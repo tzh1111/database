@@ -22,6 +22,7 @@ int ReadFourBytes(unsigned char *addr)
     return r;
 }
 
+
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
 {//从result写到RBLK
    // printf("blocksize:%d",buf->blkSize);
@@ -37,6 +38,98 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     freeBlockInBuffer(result,buf);
     result=getNewBlockInBuffer(buf);
     return *RBLK;
+}
+
+//binary search
+int Binary(int num, TempArray *temp, int len)
+{
+	int left = 0, right = len, mid;
+	while (left <= right)
+	{
+		mid = (left + right) / 2;
+		if (temp[mid].c == num)
+		{
+			return mid;
+		}
+		if (temp[mid].c < num)
+		{
+			left = mid + 1;
+		}
+		else
+			right = mid - 1;
+	}
+	return -1;
+}
+
+//sort for binary search
+int BinarySearch()
+{
+
+}
+
+int LinearSearch(Buffer *buf)
+{
+    int R_next=1,resultp=0,value=0,rblk=0,A=0,RBLK=5555;
+    const int turn=(16%7==0)?16/7:16/7+1;
+    unsigned char *bufblkr[10],*result;
+    printf("\ninput value:");
+    scanf("%d",&value);
+    result=getNewBlockInBuffer(buf);
+    for(int turni=0;turni<turn;turni++)
+    {
+        for(rblk=0;rblk<6&&R_next!=0;rblk++)
+        {
+            printf("R_next:%d\n",R_next);
+			if((bufblkr[rblk]=readBlockFromDisk(R_next,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            R_next=ReadFourBytes(bufblkr[rblk]+56);
+        }//read 7 blks of r, rest 1 blk be result
+        for(int rblki=0;rblki<rblk;rblki++)
+        {
+            for(int rtuple=0;rtuple<7;rtuple++)
+            {
+                A=ReadFourBytes(bufblkr[rblki]+rtuple*8);
+                if(A==value)
+                {
+                    for(int m=0;m<4;m++)
+                        *(result+resultp+m)=*(bufblkr[rblki]+rtuple*8+m);
+                    resultp+=4;
+                    for(int m=0;m<4;m++)
+                        *(result+resultp+m)=*(bufblkr[rblki]+rtuple*8+m+4);
+                    resultp+=4;
+                    if(resultp==56)//满64写回，后继块地址呢？
+                    {
+                        //RBLK=ReLoadResult(buf,result,&RBLK);
+                        resultp=0;
+                        if(writeBlockToDisk(result,RBLK,buf)!=0)
+                        {
+                            perror("Writing Block Failed!\n");
+                            return -1;
+                        }
+                        RBLK++;
+                    }
+                }
+            }
+        }
+        //free 7 blks
+        for(int f=0;f<rblk;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
+    }
+    //store the left results
+    if(resultp!=0)
+    {//write to disk though result blk is not full
+        for(int t=0;resultp+t<buf->blkSize;t++)
+            *(result+resultp+t)=0;//stuff with 0(ascii)
+        RBLK=ReLoadResult(buf,result,&RBLK);
+        resultp=0;
+    }
+    //free result blk
+    freeBlockInBuffer(result,buf);
 }
 
 int ProRA(Buffer *buf)//2:5:1
@@ -405,10 +498,11 @@ int main()
     }
     temp=(TempArray *)malloc(sizeof(TempArray)*100);
     memset(temp, 0, sizeof(TempArray)*100);
-    ProRA(&buf);
+    //ProRA(&buf);
     //unionsr(&buf,temp);
    // AND(&buf,temp);
-	cha(&buf,temp,-1);
+	//cha(&buf,temp,-1);
+	LinearSearch(&buf);
 	//printf("io次数：%l",buf->numIO);
 	return 0;
 }
