@@ -119,7 +119,7 @@ int AND(Buffer *buf,TempArray *temp){
     }
 }
 
-int cha(Buffer *buf,TempArray *temp)
+int cha(Buffer *buf,TempArray *temp,int outchoose)
 {
     int cnt=0;
     AND(buf,temp);
@@ -129,7 +129,17 @@ int cha(Buffer *buf,TempArray *temp)
     unsigned char *result,*bufblkr[10];
 	unsigned int resultp=0,RBLK=2222;
 	result=getNewBlockInBuffer(buf);
-	printf("\nR-S\n");
+	int choose;
+	if(outchoose!=0&&outchoose!=1)
+    {
+        printf("R-S:0/S-R:1\nplease choose:");
+        scanf("%d",&choose);
+        printf("\n---%d----\n",choose);
+    }
+    else
+        choose=outchoose;
+	if(choose==0)
+	{printf("\nR-S\n");
     for(int r=0;r<turn;r++)
     {
         for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
@@ -153,6 +163,8 @@ int cha(Buffer *buf,TempArray *temp)
                     if(temp[i].a==A&&temp[i].b==B&&temp[i].fsttmmatch==0)
                     {
                         temp[i].fsttmmatch=1;
+                        cnt++;
+                        printf("\n=====%d:%d=====%d:%d====\n",temp[i].a,temp[i].b,A,B);
                         flag=1;//no write
                         break;
                     }
@@ -188,15 +200,19 @@ int cha(Buffer *buf,TempArray *temp)
         RBLK=ReLoadResult(buf,result,&RBLK);
         resultp=0;
     }
-
+    printf("\n____%d_____cnt\n",cnt);}
 
    // for(blk in S)
         //the same as Rs
+    else if(choose==1)
+    {/*for(int tempi=0;tempi<temp_count;tempi++)
+        temp[tempi].fsttmmatch=0;
+    cnt=0;*/
     RBLK=3333;
     R_next=20;
     resultp=0;
     turn=(32%7==0)?32/7:32/7+1;
-    printf("\nR-S\n");
+    printf("\nS-R\n");
     for(int r=0;r<turn;r++)
     {
         for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
@@ -220,6 +236,8 @@ int cha(Buffer *buf,TempArray *temp)
                     if(temp[i].a==A&&temp[i].b==B&&temp[i].fsttmmatch==0)
                     {
                         temp[i].fsttmmatch=1;
+                        printf("\n=====%d:%d=====%d:%d====\n",temp[i].a,temp[i].b,A,B);
+                        cnt++;
                         flag=1;//no write
                         break;
                     }
@@ -255,8 +273,16 @@ int cha(Buffer *buf,TempArray *temp)
         RBLK=ReLoadResult(buf,result,&RBLK);
         resultp=0;
     }
-	printf("\n-------%d--------\n",cnt);
+	printf("\n-------%d--------\n",cnt);}
+	else
+        printf("\nerror choice!\n");
 
+}
+
+int unionsr(Buffer *buf,TempArray *temp)
+{
+    cha(buf,temp,1);
+    printf("\nresult in : (blk1:blk16)+(blk3333:)\n");
 }
 
 int main()
@@ -269,8 +295,10 @@ int main()
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
-    temp=(TempArray *)malloc(sizeof(TempArray)*1000);
-	cha(&buf,temp);
+    temp=(TempArray *)malloc(sizeof(TempArray)*100);
+    memset(temp, 0, sizeof(TempArray)*100);
+    unionsr(&buf,temp);
+	//cha(&buf,temp,-1);
 	//printf("io´ÎÊý£º%l",buf->numIO);
 	return 0;
 }
