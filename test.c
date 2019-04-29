@@ -30,6 +30,9 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
         perror("Writing Block Failed!\n");
         return -1;
     }
+    *(result- 1) = BLOCK_AVAILABLE;
+    buf->numFreeBlk++;
+    buf->numIO++;
     (*RBLK)+=1;
     freeBlockInBuffer(result,buf);
     result=getNewBlockInBuffer(buf);
@@ -40,15 +43,14 @@ int ProRA(Buffer *buf)//2:5:1
 {
     int R_next=1,tempblk=0,flag=0,resultp=0,ri=0,ti=0,A=0,B=0,RBLK=4444;
     unsigned char *bufblkr,*bufblktemp[10],*result;
-    const int turn=16;
     //prepare a result blk
     result=getNewBlockInBuffer(buf);
     resultp=0;
     int temp_next=4444;//where results begins
-    for(int turni=0;turni<turn;turni++)
+    for(int turni=0;turni<16;turni++)
     {
         flag=0;
-        printf("\nturni:%d,turn:%d\n",turni,turn-1);
+        printf("\nblki of r:%d\n",turni);
         if(R_next!=0)
         {//read 1 blks of R
             if((bufblkr=readBlockFromDisk(R_next,buf))==NULL)
@@ -59,85 +61,73 @@ int ProRA(Buffer *buf)//2:5:1
             R_next=ReadFourBytes(bufblkr+56);
             printf("R_next:%d\n",R_next);
         }
-        for(int tempturn=1,tempturni=0;tempturni<tempturn;tempturni++)
-        {
-            printf("\tempnturni:%d,tempturn:%d\n",tempturni,tempturn-1);
-            for(int ti=0;ti<6&&temp_next!=0;ti++)
-            //for(int ti=0;ti<1;ti++)
-            {
-                if(tempblk==0)
-                    break;
-                if((bufblktemp[ti]=readBlockFromDisk(temp_next,buf))==NULL)
-                {
-                    printf("Reading block failed!\n");
-                    return -1;
-                }
-                //temp_next=ReadFourBytes(bufblktemp[ti]+56);
-                temp_next++;
-            }//each inside turn read 5 blks of temp(for results already exits)
-            //compare 1:6 and write to result
-            //--------------==B==2
+        //compare 1:6 and write to result
+        //--------------==B==2
+        flag=0;
+        for(int rtuple=0;rtuple<7;rtuple++)
+        {//only 1 blk of R in buf, for each tuple of rblk
             flag=0;
-            for(int rtuple=0;rtuple<7;rtuple++)
-            {//only 1 blk of R in buf, for each tuple of rblk
+            for(int tblk=0;tblk<tempblk;tblk++)
+            {//compare with tblks
                 flag=0;
-                for(int tblk=0;tblk<ti;tblk++)
-                {//compare with tblks
-                    flag=0;
-                    for(int ttuple=0;ttuple<ti;ttuple++)
-                    {//each tuple in tblk
-                        flag=0;
-                        A=ReadFourBytes(bufblkr+rtuple*8);
-                        B=ReadFourBytes(bufblktemp[tblk]+ttuple*4);
-                        if(A==B)
-                        {
-                            flag=1;
-                            printf("\ncatch!%d,%d\n",A,B);
-                            break;
-                        }
-                    }
-                    if(flag==1)
-                        break;
-                }//cmp with temp
-                if(flag==1)
-                    break;
-            //compare with tuple in result
-                for(int rsttuple=0;rsttuple<resultp/4;rsttuple++)
+                for(int ttuple=0;ttuple<14;ttuple++)
                 {//each tuple in tblk
                     flag=0;
                     A=ReadFourBytes(bufblkr+rtuple*8);
-                    B=ReadFourBytes(result+rsttuple*4);
+                    B=ReadFourBytes(bufblktemp[tblk]+ttuple*4);
                     if(A==B)
                     {
                         flag=1;
                         printf("\ncatch!%d,%d\n",A,B);
                         break;
                     }
-                }//cmp with result
-                if(flag==0)
-                {//write tuple to blk;
-                    for(int m=0;m<4;m++)
-                    *(result+resultp+m)=*(bufblkr+rtuple*8+m);
-                    //*(result+resultp)=*(bufblkr[r]+ri*8);
-                    resultp+=4;
-                    // printf("\nA:%s\nB:%s",*(result+resultp-8),*(result+resultp-4));
-                    if(resultp==56)//满64写回，后继块地址呢？
-                    {
-                        RBLK=ReLoadResult(buf,result,&RBLK);
-                        resultp=0;
-                        tempblk++;
-                    }
                 }
-            }//for each tuple in r
-            //compare ends
-            for(int f=0;f<ti;f++)
-            {
-                freeBlockInBuffer(bufblktemp[f],buf);
+                if(flag==1)
+                    break;
+            }//cmp with temp
+            if(flag==1)
+                continue;
+            //compare with tuple in result
+            for(int rsttuple=0;rsttuple<resultp/4;rsttuple++)
+            {//each tuple in tblk
+                flag=0;
+                A=ReadFourBytes(bufblkr+rtuple*8);
+                B=ReadFourBytes(result+rsttuple*4);
+                if(A==B)
+                {
+                    flag=1;
+                    printf("\ncatch!%d,%d\n",A,B);
+                    break;
+                }
+            }//cmp with result
+            if(flag==0)
+            {//write tuple to blk;
+                for(int m=0;m<4;m++)
+                *(result+resultp+m)=*(bufblkr+rtuple*8+m);
+                resultp+=4;
+                if(resultp==56)//满64写回，后继块地址呢？
+                {
+                    //RBLK=ReLoadResult(buf,result,&RBLK);
+                    resultp=0;
+                    bufblktemp[tempblk]=result;
+                    if(writeBlockToDisk(result,RBLK,buf)!=0)
+                    {
+                        perror("Writing Block Failed!\n");
+                        return -1;
+                    }
+                    result=getNewBlockInBuffer(buf);
+                    RBLK++;
+                    tempblk++;
+                }
             }
-            tempturn=(tempblk%6==0)?tempblk/6:tempblk/6+1;
-        }//turn of temp
+        }//for each tuple in r
+        //compare ends
+        for(int f=0;f<ti;f++)
+        {
+            freeBlockInBuffer(bufblktemp[f],buf);
+        }
         freeBlockInBuffer(bufblkr,buf);
-    }//turn of r
+    }//16blks of R ok
     if(resultp!=0)
     {//write to disk though result blk is not full
         for(int t=0;resultp+t<buf->blkSize;t++)
@@ -146,6 +136,10 @@ int ProRA(Buffer *buf)//2:5:1
         resultp=0;
     }
     freeBlockInBuffer(result,buf);
+    for(int f=0;f<tempblk;f++)
+    {
+        freeBlockInBuffer(bufblktemp[f],buf);
+    }
 }
 
 
@@ -413,7 +407,8 @@ int main()
     memset(temp, 0, sizeof(TempArray)*100);
     ProRA(&buf);
     //unionsr(&buf,temp);
-	//cha(&buf,temp,-1);
+   // AND(&buf,temp);
+	cha(&buf,temp,-1);
 	//printf("io次数：%l",buf->numIO);
 	return 0;
 }

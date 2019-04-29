@@ -148,8 +148,5 @@ int writeBlockToDisk(unsigned char *blkPtr, unsigned int addr, Buffer *buf)
         {printf("%c",*bytePtr);fputc((*bytePtr), fp);}
     printf("\n-----------\n");
     fclose(fp);
-    *(blkPtr - 1) = BLOCK_AVAILABLE;
-    buf->numFreeBlk++;
-    buf->numIO++;
     return 0;
 }
