@@ -40,25 +40,52 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     return *RBLK;
 }
 
-//binary search
-int Binary(int num, TempArray *temp, int len)
+int sort(Buffer *buf)
 {
-	int left = 0, right = len, mid;
-	while (left <= right)
-	{
-		mid = (left + right) / 2;
-		if (temp[mid].c == num)
-		{
-			return mid;
-		}
-		if (temp[mid].c < num)
-		{
-			left = mid + 1;
-		}
-		else
-			right = mid - 1;
-	}
-	return -1;
+    TempArray temp[10];
+    int ti=0;
+    unsigned char *blkloaded;//addr
+    int R_next=1;
+    for(int blki=0;blki<16;blki++)
+    {
+        if((blkloaded=readBlockFromDisk(R_next,buf))==NULL)
+        {
+            printf("Reading block failed!\n");
+            return -1;
+        }
+        R_next=ReadFourBytes(blkloaded+56);
+        for(int tuple=0;tuple<7;tuple++)
+        {
+            temp[tuple].a=ReadFourBytes(blkloaded+tuple*8);
+            temp[tuple].b=ReadFourBytes(blkloaded+tuple*8+4);
+        }
+        for(int i=0;i<7;i++)//sort(this blk (temp) by tuple.a, larger);
+        for(int j=i+1;j<7;j++)
+        {
+            if(temp[i].a>temp[j].a)
+            {//swap(i,j)
+                int t=0;
+                t=temp[i].a;
+                temp[i].a=temp[j].a;
+                temp[j].a=t;
+                t=temp[i].b;
+                temp[i].b=temp[j].b;
+                temp[j].b=t;
+            }
+        }
+        for(int i=0;i<7;i++)
+        {
+            sprintf(blkloaded+i*8,"%d",temp[i].a);
+            sprintf(blkloaded+i*8+4,"%d",temp[i].b);
+        }
+        //writebacktodisk;
+        if(writeBlockToDisk(blkloaded,blki+601,buf)!=0)
+        {
+            perror("Writing Block Failed!\n");
+            return -1;
+        }
+        freeBlockInBuffer(blkloaded,buf);
+    }
 }
 
 //sort for binary search
@@ -502,7 +529,8 @@ int main()
     //unionsr(&buf,temp);
    // AND(&buf,temp);
 	//cha(&buf,temp,-1);
-	LinearSearch(&buf);
+	//LinearSearch(&buf);
+	sort(&buf);
 	//printf("io´ÎÊý£º%l",buf->numIO);
 	return 0;
 }
