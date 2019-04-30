@@ -26,6 +26,7 @@ int ReadFourBytes(unsigned char *addr)
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
 {//从result写到RBLK
    // printf("blocksize:%d",buf->blkSize);
+    sprintf(result+60,"%d",*(RBLK)+1);
     if(writeBlockToDisk(result,*(RBLK),buf)!=0)
     {
         perror("Writing Block Failed!\n");
@@ -40,7 +41,7 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     return *RBLK;
 }
 
-int sort(Buffer *buf)
+int sortinside(Buffer *buf)
 {
     TempArray temp[10];
     int ti=0;
@@ -79,12 +80,79 @@ int sort(Buffer *buf)
             sprintf(blkloaded+i*8+4,"%d",temp[i].b);
         }
         //writebacktodisk;
+        sprintf(blkloaded+60,"%d",blki+602);
         if(writeBlockToDisk(blkloaded,blki+601,buf)!=0)
         {
             perror("Writing Block Failed!\n");
             return -1;
         }
         freeBlockInBuffer(blkloaded,buf);
+    }
+}
+
+int MergeSort(Buffer *buf)
+{
+    TempArray temp[10];
+    int ti=0,blki=0;
+    const int VERYLARGE=10000;
+    unsigned char *bufblkr[10],*bufblkresult=getNewBlockInBuffer(buf);//addr
+    int R_next=601,A,B,C,D,resulttuple=0,RBLK=800;
+    for(int turn=0;turn<3;turn++)
+    {
+        for(blki=0;blki<7&&R_next<=616;blki++)//maybe less than 7
+        {
+            if((bufblkr[blki]=readBlockFromDisk(R_next,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            R_next++;
+        }//read 7 blks of r
+        for(int road=0;road<blki;road++)
+        {
+            temp[road].a=ReadFourBytes(bufblkr[road]);
+            temp[road].b=ReadFourBytes(bufblkr[road]);
+            temp[road].fsttmmatch=0;
+        }//init 7 roads
+        resulttuple=0;
+        for(int all=0;all<7*blki;all++)
+        {
+            int min=VERYLARGE;
+            int minroad=0;
+            for(int road=0;road<blki;road++)
+            {
+                if(temp[road].a<min)
+                {
+                    min=temp[road].a;
+                    minroad=road;
+                }
+            }//find min in 7 roads
+            sprintf(bufblkresult+resulttuple*8,"%s","");
+            sprintf(bufblkresult+resulttuple*8+4,"%s","");
+            sprintf(bufblkresult+resulttuple*8,"%d",temp[minroad].a);
+            sprintf(bufblkresult+resulttuple*8+4,"%d",temp[minroad].b);
+            resulttuple++;
+            if(resulttuple>=7)
+            {
+                RBLK=ReLoadResult(buf,bufblkresult,&RBLK);
+                resulttuple=0;
+            }
+           // writetemp[minroad]toblk
+            temp[minroad].fsttmmatch++;
+            if(temp[minroad].fsttmmatch>=7)
+                temp[minroad].a=VERYLARGE;
+            else
+            {
+                temp[minroad].a=ReadFourBytes(bufblkr[minroad]+temp[minroad].fsttmmatch*8);
+                temp[minroad].b=ReadFourBytes(bufblkr[minroad]+temp[minroad].fsttmmatch*8+4);
+            }
+                //readtuple(minroad*8)to temp[minroad]
+        }
+        for(int f=0;f<7;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
+        printf("\n-======-\n");
     }
 }
 
@@ -131,6 +199,7 @@ int LinearSearch(Buffer *buf)
                     {
                         //RBLK=ReLoadResult(buf,result,&RBLK);
                         resultp=0;
+                        sprintf(result+60,"%d",RBLK+1);
                         if(writeBlockToDisk(result,RBLK,buf)!=0)
                         {
                             perror("Writing Block Failed!\n");
@@ -230,6 +299,7 @@ int ProRA(Buffer *buf)//2:5:1
                     //RBLK=ReLoadResult(buf,result,&RBLK);
                     resultp=0;
                     bufblktemp[tempblk]=result;
+                    sprintf(result+60,"%d",RBLK+1);
                     if(writeBlockToDisk(result,RBLK,buf)!=0)
                     {
                         perror("Writing Block Failed!\n");
@@ -530,7 +600,8 @@ int main()
    // AND(&buf,temp);
 	//cha(&buf,temp,-1);
 	//LinearSearch(&buf);
-	sort(&buf);
+	sortinside(&buf);
+	MergeSort(&buf);
 	//printf("io次数：%l",buf->numIO);
 	return 0;
 }

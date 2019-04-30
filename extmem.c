@@ -143,7 +143,7 @@ int writeBlockToDisk(unsigned char *blkPtr, unsigned int addr, Buffer *buf)
         return -1;
     }
     printf("write to blk:%d\n---------\n",addr);
-    for (bytePtr = blkPtr; bytePtr < blkPtr + 56; bytePtr++)
+    for (bytePtr = blkPtr; bytePtr < blkPtr + 64; bytePtr++)
         //fputc((int)(*bytePtr), fp);
         {printf("%c",*bytePtr);fputc((*bytePtr), fp);}
     printf("\n-----------\n");
