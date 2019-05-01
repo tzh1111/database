@@ -199,100 +199,98 @@ int MergeSort(Buffer *buf)
         }
         printf("\n-======-\n");
     }
+    freeBlockInBuffer(bufblkresult,buf);
 }
 
-/*int MergeSortPlus(Buffer *buf)
-{
+int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
+{//记录每条路上总共的块数，每条路上现在的块号，现在存在temp里的tuple，最后落实到tuple
+    //tuple结束换下一个tuple，若下一个tuple=8，换下一个块，若下一个块大于等于总共块数量，置这一路为无穷大
     const int VERYLARGE=10000;
-    int R_next=800,road=0,tuple[10];
+    int TotalBlkInRoad[10],NowBlkInRoad[10],TupleInRoad[10],resulttuple=0;
+    int R_next=800,Allblks,RBLK=1000;
     TempArray temp[10];
-    unsigned char *bufblkr[10],*bufblkresult=getNewBlockInBuffer(buf);//addr
+    unsigned char *BufBlkRoad[10],*result;//addr
+    if(choose==0)//R
+        Allblks=16;
+    else
+        Allblks=32;
+    MergeSort(buf);
+    result=getNewBlockInBuffer(buf);
     //road0:800-806, road1:807-813, road2:814-815
-    for(;road<3;road++)
+    for(int roadi=0;roadi<7;roadi++)//init
     {
-        if((bufblkr[road]=readBlockFromDisk(800+road*7,buf))==NULL)
+        TotalBlkInRoad[roadi]=(Allblks>=7)?7:Allblks;
+        Allblks-=TotalBlkInRoad[roadi];
+        if(TotalBlkInRoad[roadi]==0)
+        {
+            temp[roadi].a=VERYLARGE;
+            continue;
+        }
+        if((BufBlkRoad[roadi]=readBlockFromDisk(800+roadi*7,buf))==NULL)
         {
             printf("Reading block failed!\n");
             return -1;
         }
-        tuple[road]=0;
-        temp[road].a=ReadFourBytes(bufblkr[road]);
-        temp[road].b=ReadFourBytes(bufblkr[road]);
-        tuple[road]++;
-        temp[road].fsttmmatch=0;//means which blk,can be counted by 800+fsttmatch*road
-    }//init__load 3 blks for 3 roads, and read the first tuple
-    resulttuple=0;
+        NowBlkInRoad[roadi]=0;
+        TupleInRoad[roadi]=0;
+        temp[roadi].a=ReadFourBytes(BufBlkRoad[roadi]);
+        temp[roadi].b=ReadFourBytes(BufBlkRoad[roadi]);
+        TupleInRoad[roadi]++;
+    }//init
     while(1)
     {
         int min=VERYLARGE;
         int minroad=0;
-        for(int road=0;road<3;road++)
+        for(int roadi=0;roadi<7;roadi++)
         {
-            if(temp[road].a<min)
+            if(temp[roadi].a<min)
             {
-                min=temp[road].a;
-                minroad=road;
+                min=temp[roadi].a;
+                minroad=roadi;
             }
-        }
-        if(min=VERYLARGE)
+        }//find min in 7 roads
+        if(min==VERYLARGE)//all roads are nothing left
             break;
-        sprintf(bufblkresult+resulttuple*8,"%s","");
-        sprintf(bufblkresult+resulttuple*8+4,"%s","");
-        sprintf(bufblkresult+resulttuple*8,"%d",temp[minroad].a);
-        sprintf(bufblkresult+resulttuple*8+4,"%d",temp[minroad].b);
-        resulttuple++;
-        if(resulttuple>=7)
+        //write the min tuple of 7 roads to result
+        sprintf(result+resulttuple*8,"%s","");
+        sprintf(result+resulttuple*8+4,"%s","");
+        sprintf(result+resulttuple*8,"%d",temp[minroad].a);
+        sprintf(result+resulttuple*8+4,"%d",temp[minroad].b);
+        resulttuple++;//next tuple to write
+        if(resulttuple>=7)//if result blk is full, reload
         {
-            RBLK=ReLoadResult(buf,bufblkresult,&RBLK);
+            RBLK=ReLoadResult(buf,result,&RBLK);
             resulttuple=0;
         }// writetemp[minroad]toblk
-        if(tuple[minroad]>=8)//min road has no blk left
+        if(TupleInRoad[minroad]>=7)//min road has no tuple left
         {
-            if((minroad==2&&temp[minroad].fsttmmatch<1)||(minroad!=2&&temp[minroad].fsttmmatch<6))
+            if(NowBlkInRoad[minroad]<TotalBlkInRoad[minroad]-1)//if has blk to load
             {
-                temp[minroad].fsttmmatch++;
+                NowBlkInRoad[minroad]++;
                 //load next blk for minroad
-                if((bufblkr[minroad]=readBlockFromDisk(800+minroad*7,buf))==NULL)
+                freeBlockInBuffer(BufBlkRoad[minroad],buf);//before read, free it
+                if((BufBlkRoad[minroad]=readBlockFromDisk(800+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
                 {
                     printf("Reading block failed!\n");
                     return -1;
                 }
-                tuple[minroad]=0;
+                TupleInRoad[minroad]=0;
             }
             else
-            temp[minroad].a=VERYLARGE;
+            {temp[minroad].a=VERYLARGE;continue;}//nothing left , set max and continue next turn of cmp
         }
         //read tuple for minroad
-        temp[minroad].a=ReadFourBytes(bufblkr[minroad]+tuple[minroad]*8);
-        temp[minroad].b=ReadFourBytes(bufblkr[minroad]+tuple[minroad]*8+4);
-        tuple[minroad]++;
-        //end if tuple>7
-        //now if blk of road>7//2
-        if(temp[minroad].fsttmmatch>=7)
-            temp[minroad].a=VERYLARGE;
-        else
-        {
-            if((bufblkr[minroad]=readBlockFromDisk(800+minroad*7+temp[minroad].fsttmmatch,buf))==NULL)
-            {
-                printf("Reading block failed!\n");
-                return -1;
-            }
-            tuple[road]=0;
-            temp[road].a=ReadFourBytes(bufblkr[road]);
-            temp[road].b=ReadFourBytes(bufblkr[road]);
-            temp[minroad].fsttmmatch++;
-            tuple[minroad]++;
-        }
-                //readtuple(minroad*8)to temp[minroad]
-        }
-        for(int f=0;f<7;f++)
-        {
-            freeBlockInBuffer(bufblkr[f],buf);
-        }
-        //
-
+        temp[minroad].a=ReadFourBytes(BufBlkRoad[minroad]+TupleInRoad[minroad]*8);
+        temp[minroad].b=ReadFourBytes(BufBlkRoad[minroad]+TupleInRoad[minroad]*8+4);
+        TupleInRoad[minroad]++;//next tuple to read
+    }
+    for(int f=0;f<7;f++)
+    {
+        freeBlockInBuffer(BufBlkRoad[f],buf);
+    }
+    freeBlockInBuffer(result,buf);
 }
-*/
+
 
 //sort for binary search
 int BinarySearch()
@@ -746,7 +744,8 @@ int main()
 	//LinearSearch(&buf,7,-1);
 	//sortinside(&buf);
 	//MergeSort(&buf);
-	NestLoopJoin(&buf);
+	//NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
+	MergeSortPlus(buf,0);
 	return 0;
 }
