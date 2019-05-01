@@ -22,7 +22,6 @@ int ReadFourBytes(unsigned char *addr)
     return r;
 }
 
-
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
 {//从result写到RBLK
    // printf("blocksize:%d",buf->blkSize);
@@ -39,6 +38,52 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     freeBlockInBuffer(result,buf);
     result=getNewBlockInBuffer(buf);
     return *RBLK;
+}
+
+int NestLoopJoin(Buffer *buf)
+{//R:S:result---6:1:1
+    int S_next=20,A,B;
+    unsigned char *bufblks,*result;
+    TempArray temp[100];
+    result=getNewBlockInBuffer(buf);
+    int resulti=0,RBLK=900;
+    while(S_next<=51)
+    {
+        if((bufblks=readBlockFromDisk(S_next,buf))==NULL)
+        {
+            printf("Reading block failed!\n");
+            return -1;
+        }
+        S_next++;
+       // S_next=ReadFourBytes(bufblks+52);
+        for(int tuple=0;tuple<7;tuple++)
+        {
+             A=ReadFourBytes(bufblks+tuple*8);
+             B=ReadFourBytes(bufblks+tuple*8+2);
+             LinearSearch(buf,5,A,temp);
+             for(int tempi=0;tempi<temp_count;tempi++)
+             {
+                 sprintf(result+12*resulti,"%d",A);//resulti:0-4
+                 sprintf(result+12*resulti+4,"%d",B);
+                 sprintf(result+12*resulti+8,"%d",temp[tempi].b);
+                 resulti++;
+                 if(resulti>=5)
+                 {
+                     RBLK=ReLoadResult(buf,result,&RBLK);
+                     resulti=0;
+                 }
+             }
+        }
+        freeBlockInBuffer(bufblks,buf);
+    }
+    if(resulti!=0)
+    {
+        for(int t=0;resulti+t<buf->blkSize;t++)
+            *(result+resulti+t)=0;//stuff with 0(ascii)
+        RBLK=ReLoadResult(buf,result,&RBLK);
+        resulti=0;
+    }
+    freeBlockInBuffer(result,buf);
 }
 
 int sortinside(Buffer *buf)
@@ -156,23 +201,120 @@ int MergeSort(Buffer *buf)
     }
 }
 
+/*int MergeSortPlus(Buffer *buf)
+{
+    const int VERYLARGE=10000;
+    int R_next=800,road=0,tuple[10];
+    TempArray temp[10];
+    unsigned char *bufblkr[10],*bufblkresult=getNewBlockInBuffer(buf);//addr
+    //road0:800-806, road1:807-813, road2:814-815
+    for(;road<3;road++)
+    {
+        if((bufblkr[road]=readBlockFromDisk(800+road*7,buf))==NULL)
+        {
+            printf("Reading block failed!\n");
+            return -1;
+        }
+        tuple[road]=0;
+        temp[road].a=ReadFourBytes(bufblkr[road]);
+        temp[road].b=ReadFourBytes(bufblkr[road]);
+        tuple[road]++;
+        temp[road].fsttmmatch=0;//means which blk,can be counted by 800+fsttmatch*road
+    }//init__load 3 blks for 3 roads, and read the first tuple
+    resulttuple=0;
+    while(1)
+    {
+        int min=VERYLARGE;
+        int minroad=0;
+        for(int road=0;road<3;road++)
+        {
+            if(temp[road].a<min)
+            {
+                min=temp[road].a;
+                minroad=road;
+            }
+        }
+        if(min=VERYLARGE)
+            break;
+        sprintf(bufblkresult+resulttuple*8,"%s","");
+        sprintf(bufblkresult+resulttuple*8+4,"%s","");
+        sprintf(bufblkresult+resulttuple*8,"%d",temp[minroad].a);
+        sprintf(bufblkresult+resulttuple*8+4,"%d",temp[minroad].b);
+        resulttuple++;
+        if(resulttuple>=7)
+        {
+            RBLK=ReLoadResult(buf,bufblkresult,&RBLK);
+            resulttuple=0;
+        }// writetemp[minroad]toblk
+        if(tuple[minroad]>=8)//min road has no blk left
+        {
+            if((minroad==2&&temp[minroad].fsttmmatch<1)||(minroad!=2&&temp[minroad].fsttmmatch<6))
+            {
+                temp[minroad].fsttmmatch++;
+                //load next blk for minroad
+                if((bufblkr[minroad]=readBlockFromDisk(800+minroad*7,buf))==NULL)
+                {
+                    printf("Reading block failed!\n");
+                    return -1;
+                }
+                tuple[minroad]=0;
+            }
+            else
+            temp[minroad].a=VERYLARGE;
+        }
+        //read tuple for minroad
+        temp[minroad].a=ReadFourBytes(bufblkr[minroad]+tuple[minroad]*8);
+        temp[minroad].b=ReadFourBytes(bufblkr[minroad]+tuple[minroad]*8+4);
+        tuple[minroad]++;
+        //end if tuple>7
+        //now if blk of road>7//2
+        if(temp[minroad].fsttmmatch>=7)
+            temp[minroad].a=VERYLARGE;
+        else
+        {
+            if((bufblkr[minroad]=readBlockFromDisk(800+minroad*7+temp[minroad].fsttmmatch,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            tuple[road]=0;
+            temp[road].a=ReadFourBytes(bufblkr[road]);
+            temp[road].b=ReadFourBytes(bufblkr[road]);
+            temp[minroad].fsttmmatch++;
+            tuple[minroad]++;
+        }
+                //readtuple(minroad*8)to temp[minroad]
+        }
+        for(int f=0;f<7;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
+        //
+
+}
+*/
+
 //sort for binary search
 int BinarySearch()
 {
 
 }
 
-int LinearSearch(Buffer *buf)
+int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
 {
-    int R_next=1,resultp=0,value=0,rblk=0,A=0,RBLK=5555;
-    const int turn=(16%7==0)?16/7:16/7+1;
+    int R_next=1,resultp=0,rblk=0,A=0,RBLK=5555;
+    const int turn=(16%blkforr==0)?16/blkforr:16/blkforr+1;
     unsigned char *bufblkr[10],*result;
-    printf("\ninput value:");
-    scanf("%d",&value);
+    temp_count=0;
+    if(value==-1)
+    {
+        printf("\ninput value:");
+        scanf("%d",&value);
+    }
     result=getNewBlockInBuffer(buf);
     for(int turni=0;turni<turn;turni++)
     {
-        for(rblk=0;rblk<6&&R_next!=0;rblk++)
+        for(rblk=0;rblk<blkforr&&R_next!=0;rblk++)
         {
             printf("R_next:%d\n",R_next);
 			if((bufblkr[rblk]=readBlockFromDisk(R_next,buf))==NULL)
@@ -189,6 +331,9 @@ int LinearSearch(Buffer *buf)
                 A=ReadFourBytes(bufblkr[rblki]+rtuple*8);
                 if(A==value)
                 {
+                    temp[temp_count].a=A;
+                    temp[temp_count].b=ReadFourBytes(bufblkr[rblki]+rtuple*8+4);
+                    temp_count++;
                     for(int m=0;m<4;m++)
                         *(result+resultp+m)=*(bufblkr[rblki]+rtuple*8+m);
                     resultp+=4;
@@ -331,7 +476,6 @@ int ProRA(Buffer *buf)//2:5:1
         freeBlockInBuffer(bufblktemp[f],buf);
     }
 }
-
 
 int AND(Buffer *buf,TempArray *temp){
     temp_count=0;
@@ -593,15 +737,16 @@ int main()
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
-    temp=(TempArray *)malloc(sizeof(TempArray)*100);
-    memset(temp, 0, sizeof(TempArray)*100);
+    //temp=(TempArray *)malloc(sizeof(TempArray)*100);
+    //memset(temp, 0, sizeof(TempArray)*100);
     //ProRA(&buf);
     //unionsr(&buf,temp);
    // AND(&buf,temp);
 	//cha(&buf,temp,-1);
-	//LinearSearch(&buf);
-	sortinside(&buf);
-	MergeSort(&buf);
+	//LinearSearch(&buf,7,-1);
+	//sortinside(&buf);
+	//MergeSort(&buf);
+	NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
 	return 0;
 }
