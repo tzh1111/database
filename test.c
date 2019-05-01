@@ -25,6 +25,7 @@ int ReadFourBytes(unsigned char *addr)
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
 {//从result写到RBLK
    // printf("blocksize:%d",buf->blkSize);
+    sprintf(result+56,"%s","    ");
     sprintf(result+60,"%d",*(RBLK)+1);
     if(writeBlockToDisk(result,*(RBLK),buf)!=0)
     {
@@ -86,13 +87,18 @@ int NestLoopJoin(Buffer *buf)
     freeBlockInBuffer(result,buf);
 }
 
-int sortinside(Buffer *buf)
+int sortinside(Buffer *buf,int choose)//ok
 {
     TempArray temp[10];
     int ti=0;
     unsigned char *blkloaded;//addr
-    int R_next=1;
-    for(int blki=0;blki<16;blki++)
+    int R_next;
+    int allblk, RBLK;
+    if(choose==0)
+        {allblk=16;RBLK=600;R_next=1;}
+    else
+        {allblk=32;RBLK=700;R_next=20;}
+    for(int blki=0;blki<allblk;blki++)
     {
         if((blkloaded=readBlockFromDisk(R_next,buf))==NULL)
         {
@@ -125,8 +131,9 @@ int sortinside(Buffer *buf)
             sprintf(blkloaded+i*8+4,"%d",temp[i].b);
         }
         //writebacktodisk;
-        sprintf(blkloaded+60,"%d",blki+602);
-        if(writeBlockToDisk(blkloaded,blki+601,buf)!=0)
+        sprintf(blkloaded+56,"%s","    ");
+        sprintf(blkloaded+60,"%d",blki+RBLK+2);
+        if(writeBlockToDisk(blkloaded,blki+RBLK+1,buf)!=0)
         {
             perror("Writing Block Failed!\n");
             return -1;
@@ -135,16 +142,21 @@ int sortinside(Buffer *buf)
     }
 }
 
-int MergeSort(Buffer *buf)
+int MergeSort(Buffer *buf,int choose)//ok(800/850)
 {
     TempArray temp[10];
     int ti=0,blki=0;
     const int VERYLARGE=10000;
     unsigned char *bufblkr[10],*bufblkresult=getNewBlockInBuffer(buf);//addr
-    int R_next=601,A,B,C,D,resulttuple=0,RBLK=800;
-    for(int turn=0;turn<3;turn++)
+    int R_next,A,B,C,D,resulttuple=0,RBLK,allturn,rmax;
+    if(choose==0)
+    {R_next=601;RBLK=800;allturn=3;rmax=616;}
+    else
+    {R_next=701;RBLK=850;allturn=5;rmax=732;}
+    sortinside(buf,choose);
+    for(int turn=0;turn<allturn;turn++)
     {
-        for(blki=0;blki<7&&R_next<=616;blki++)//maybe less than 7
+        for(blki=0;blki<7&&R_next<=rmax;blki++)//maybe less than 7
         {
             if((bufblkr[blki]=readBlockFromDisk(R_next,buf))==NULL)
             {
@@ -156,7 +168,7 @@ int MergeSort(Buffer *buf)
         for(int road=0;road<blki;road++)
         {
             temp[road].a=ReadFourBytes(bufblkr[road]);
-            temp[road].b=ReadFourBytes(bufblkr[road]);
+            temp[road].b=ReadFourBytes(bufblkr[road]+4);
             temp[road].fsttmmatch=0;
         }//init 7 roads
         resulttuple=0;
@@ -172,8 +184,8 @@ int MergeSort(Buffer *buf)
                     minroad=road;
                 }
             }//find min in 7 roads
-            sprintf(bufblkresult+resulttuple*8,"%s","");
-            sprintf(bufblkresult+resulttuple*8+4,"%s","");
+            sprintf(bufblkresult+resulttuple*8,"%s","    ");
+            sprintf(bufblkresult+resulttuple*8+4,"%s","    ");
             sprintf(bufblkresult+resulttuple*8,"%d",temp[minroad].a);
             sprintf(bufblkresult+resulttuple*8+4,"%d",temp[minroad].b);
             resulttuple++;
@@ -207,14 +219,14 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
     //tuple结束换下一个tuple，若下一个tuple=8，换下一个块，若下一个块大于等于总共块数量，置这一路为无穷大
     const int VERYLARGE=10000;
     int TotalBlkInRoad[10],NowBlkInRoad[10],TupleInRoad[10],resulttuple=0;
-    int R_next=800,Allblks,RBLK=1000;
+    int R_next,Allblks,RBLK=1000;
     TempArray temp[10];
     unsigned char *BufBlkRoad[10],*result;//addr
     if(choose==0)//R
-        Allblks=16;
+        {Allblks=16;R_next=800;RBLK=1000;}
     else
-        Allblks=32;
-    MergeSort(buf);
+        {Allblks=32;R_next=850;RBLK=1050;}
+    MergeSort(buf,choose);
     result=getNewBlockInBuffer(buf);
     //road0:800-806, road1:807-813, road2:814-815
     for(int roadi=0;roadi<7;roadi++)//init
@@ -226,7 +238,7 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
             temp[roadi].a=VERYLARGE;
             continue;
         }
-        if((BufBlkRoad[roadi]=readBlockFromDisk(800+roadi*7,buf))==NULL)
+        if((BufBlkRoad[roadi]=readBlockFromDisk(R_next+roadi*7,buf))==NULL)
         {
             printf("Reading block failed!\n");
             return -1;
@@ -234,7 +246,7 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
         NowBlkInRoad[roadi]=0;
         TupleInRoad[roadi]=0;
         temp[roadi].a=ReadFourBytes(BufBlkRoad[roadi]);
-        temp[roadi].b=ReadFourBytes(BufBlkRoad[roadi]);
+        temp[roadi].b=ReadFourBytes(BufBlkRoad[roadi]+4);
         TupleInRoad[roadi]++;
     }//init
     while(1)
@@ -252,8 +264,8 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
         if(min==VERYLARGE)//all roads are nothing left
             break;
         //write the min tuple of 7 roads to result
-        sprintf(result+resulttuple*8,"%s","");
-        sprintf(result+resulttuple*8+4,"%s","");
+        sprintf(result+resulttuple*8,"%s","    ");
+        sprintf(result+resulttuple*8+4,"%s","    ");
         sprintf(result+resulttuple*8,"%d",temp[minroad].a);
         sprintf(result+resulttuple*8+4,"%d",temp[minroad].b);
         resulttuple++;//next tuple to write
@@ -269,7 +281,7 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
                 NowBlkInRoad[minroad]++;
                 //load next blk for minroad
                 freeBlockInBuffer(BufBlkRoad[minroad],buf);//before read, free it
-                if((BufBlkRoad[minroad]=readBlockFromDisk(800+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
+                if((BufBlkRoad[minroad]=readBlockFromDisk(R_next+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
                 {
                     printf("Reading block failed!\n");
                     return -1;
@@ -742,10 +754,10 @@ int main()
    // AND(&buf,temp);
 	//cha(&buf,temp,-1);
 	//LinearSearch(&buf,7,-1);
-	//sortinside(&buf);
-	//MergeSort(&buf);
+	//sortinside(&buf,1);
+	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
-	MergeSortPlus(buf,0);
+	MergeSortPlus(buf,1);
 	return 0;
 }
