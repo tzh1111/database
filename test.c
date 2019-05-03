@@ -233,7 +233,8 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
     int TotalBlkInRoad[10],NowBlkInRoad[10],TupleInRoad[10],resulttuple=0;
     int R_next,Allblks,RBLK=1000;
     TempArray temp[10];
-    unsigned char *BufBlkRoad[10],*result;//addr
+    int y;
+    char *BufBlkRoad[10],*result,*t[10],*x;//addr
     if(choose==0)//R
         {Allblks=16;R_next=800;RBLK=1000;}
     else
@@ -290,13 +291,25 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
         {
             if(NowBlkInRoad[minroad]<TotalBlkInRoad[minroad]-1)//if has blk to load
             {
-                NowBlkInRoad[minroad]++;
                 //load next blk for minroad
                 freeBlockInBuffer(BufBlkRoad[minroad],buf);//before read, free it
-                if((BufBlkRoad[minroad]=readBlockFromDisk(R_next+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
+                NowBlkInRoad[minroad]++;
+                for(int a=0;a<7;a++)
+                {
+                    t[a]=BufBlkRoad[a];
+                }
+                if((x=readBlockFromDisk(R_next+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
                 {
                     printf("Reading block failed!\n");
                     return -1;
+                }
+                 BufBlkRoad[minroad]=x;
+                for(int a=0;a<7;a++)
+                {
+                    if((t[a]!=BufBlkRoad[a])&&(a!=minroad))
+                    {
+                        BufBlkRoad[a]=t[a];
+                    }
                 }
                 TupleInRoad[minroad]=0;
             }
@@ -453,6 +466,132 @@ int BinarySearch(Buffer *buf,int choose,int value)
         }
     }
 }
+
+
+TempArray * SortByTemp(Buffer *buf,int choose)//ok
+{
+    TempArray datas[300];
+    int next;
+    char *blk;
+    if(choose==0)
+    {next=1;}
+    else
+    {next=20;}
+    int cnt=0;
+    while(next!=0)
+    {
+        if((blk=readBlockFromDisk(next,buf))==NULL)
+            {printf("error read!__%d",next);
+            return -1;}
+        for(int tuple=0;tuple<7;tuple++)
+        {
+            datas[cnt].a=ReadFourBytes(blk+8*tuple);
+            datas[cnt].b=ReadFourBytes(blk+8*tuple+4);
+            datas[cnt].fsttmmatch=cnt;
+            cnt++;
+        }
+        next=ReadFourBytes(blk+56);
+        freeBlockInBuffer(blk,buf);
+    }
+    datas[cnt].a=-1;
+    for(int i=0;i<cnt;i++)
+    {
+        for(int j=i+1;j<cnt;j++)
+        {
+            if(datas[i].a>datas[j].a)
+            {
+                int t=0;
+                t=datas[i].a;
+                datas[i].a=datas[j].a;
+                datas[j].a=t;
+                t=datas[i].b;
+                datas[i].b=datas[j].b;
+                datas[j].b=t;
+                t=datas[i].fsttmmatch;
+                datas[i].fsttmmatch=datas[j].fsttmmatch;
+                datas[j].fsttmmatch=t;
+            }
+        }
+    }
+    return datas;
+}
+
+int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
+{
+    TempArray *datas=SortByTemp(buf,choose);
+    TempArray result[30];
+    int i=0;
+    for(i=0;datas[i].a!=-1;i++);
+    int low=0,high=i,mid=low+(high-low)/2;
+    while(datas[mid].a!=value&&low<high)
+    {
+        if(datas[mid].a>value)
+        {
+            high=mid;
+            mid=low+(high-low+1)/2;
+        }
+        else if(datas[mid].a<value)
+        {
+            low=mid;
+            mid=low+(high-low+1)/2;
+        }
+    }
+    int cnt=0;
+    for(int now=mid;now>=0;now--)
+    {
+        if(datas[now].a==value)
+        {
+            result[cnt].a=value;
+            result[cnt].b=datas[now].b;
+            result[cnt].fsttmmatch=now;
+            cnt++;
+        }
+        else
+            break;
+    }
+    for(int now=mid+1;now<i;now++)
+    {
+        if(datas[now].a==value)
+        {
+            result[cnt].a=value;
+            result[cnt].b=datas[now].b;
+            result[cnt].fsttmmatch=now;
+            cnt++;
+        }
+        else
+            break;
+    }
+    for(int x=0;x<cnt;x++)
+    {
+        printf("\n%d,%d,%d\n",result[x].a,result[x].b,result[x].fsttmmatch);
+    }
+    printf("%d",cnt);
+    return result[0].fsttmmatch;
+}
+
+int IndexSearch(Buffer *buf,int choose,int value)
+{
+    TempArray *datas=SortByTemp(buf,choose);
+    int index[20];
+    int all=0,i=0;
+    for(all=0;datas[all].a!=-1;all++);
+    for(i=0;i<datas[all-1].a;i++)
+    {
+        index[i]=datas[5*i].a;
+    }
+    for(int j=all-1;j>0;j--)
+    {
+        if(value>=index[j/5])
+            break;
+    }
+    if(value<datas[0])
+        printf("cannot find!");
+    else
+    {
+
+    }
+}
+
 
 int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
 {
@@ -907,5 +1046,8 @@ int main()
 	/*int value;
 	scanf("%d",&value);
 	BinarySearch(&buf,0,value);*/
+	//SortByTemp(buf,0);
+	//BinarySearchByTemp(buf,0,32);
+	IndexSearch(buf,0,32);
 	return 0;
 }
