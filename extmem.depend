@@ -53,7 +53,13 @@
 
 1308709046 c:\users\cosmos2001\desktop\lab4\extmem-c\extmem.h
 
-1556727915 source:c:\users\cosmos2001\desktop\lab4\extmem-c\test.c
+1556865257 source:c:\users\cosmos2001\desktop\lab4\extmem-c\test.c
+	<stdio.h>
+	<stdlib.h>
+	"extmem.h"
+	<string.h>
+
+1556865064 source:c:\users\cosmos2001\desktop\lab4\extmem-c\abc.c
 	<stdio.h>
 	<stdlib.h>
 	"extmem.h"

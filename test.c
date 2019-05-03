@@ -9,7 +9,7 @@ typedef struct TempArray{
     int fsttmmatch;//first time match?0/1:true/false
 }TempArray;
 //READ DATA FROM DISK TO TEMPARRAY
-
+int temp_count=0;
 int ReadFourBytes(unsigned char *addr)
 {
     char tempbyte[4];
@@ -19,6 +19,22 @@ int ReadFourBytes(unsigned char *addr)
     }
     int r=atoi(tempbyte);
     return r;
+}
+
+int ReLoadResult_abc(Buffer *buf,unsigned char *result,unsigned int* RBLK)
+{//从result写到RBLK
+   // printf("blocksize:%d",buf->blkSize);
+/*    sprintf(result+56,"%s","    ");
+    sprintf(result+60,"%d",*(RBLK)+1);*/
+    if(writeBlockToDisk(result,*(RBLK),buf)!=0)
+    {
+        perror("Writing Block Failed!\n");
+        return -1;
+    }
+    (*RBLK)+=1;
+    freeBlockInBuffer(result,buf);
+    result=getNewBlockInBuffer(buf);
+    return *RBLK;
 }
 
 int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
@@ -31,9 +47,6 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
         perror("Writing Block Failed!\n");
         return -1;
     }
-    *(result- 1) = BLOCK_AVAILABLE;
-    buf->numFreeBlk++;
-    buf->numIO++;
     (*RBLK)+=1;
     freeBlockInBuffer(result,buf);
     result=getNewBlockInBuffer(buf);
@@ -619,11 +632,13 @@ int ProRA(Buffer *buf)//2:5:1
     }
 }
 
+
 int AND(Buffer *buf,TempArray *temp){
+    temp_count=0;
 	const int turn=(16%6==0)?16/6:16/6+1;
 	unsigned char *bufblkr[10],*bufblks, *result;
 	unsigned int resultp=0;
-	int A,B,C,D,temp_count=0;
+	int A,B,C,D;
 	unsigned int RBLK=1111, R_next=1, S_next=20;
 
 	result=getNewBlockInBuffer(buf);
@@ -648,13 +663,7 @@ int AND(Buffer *buf,TempArray *temp){
 		while(S_next!=0)
         {
             printf("S-next:%d\n",S_next);
-            if(S_next==35)
-            printf("---");
-            if((bufblks=readBlockFromDisk(S_next,buf))==NULL)
-            {
-                printf("Reading block failed!\n");
-                return -1;
-            }
+            bufblks=readBlockFromDisk(S_next,buf);
             S_next=ReadFourBytes(bufblks+56);
             for(int r=0;r<j;r++)
             {
@@ -663,7 +672,7 @@ int AND(Buffer *buf,TempArray *temp){
                     A=ReadFourBytes(bufblkr[r]+ri*8);
                     B=ReadFourBytes(bufblkr[r]+ri*8+4);
                    // printf("\nA:%d,B:%d\n",A,B);
-                    for(int si=0;si<7;si++)//一个blk7个元组
+                    for(int si=0;si<7;si++)//一个blk八个元组
                     {
                         C=ReadFourBytes(bufblks+si*8);
                         D=ReadFourBytes(bufblks+si*8+4);
@@ -671,24 +680,19 @@ int AND(Buffer *buf,TempArray *temp){
                         if(A==C&&B==D)
                         {
                             printf("\ncache!r:%d,si:%d,____%d,%d,%d,%d\n",r,si,A,B,C,D);
-                            /*temp[temp_count].a=A;
+                            temp[temp_count].a=A;
                             temp[temp_count].b=B;
-                            temp[temp_count].fsttmmatch=0;*/
+                            temp[temp_count].fsttmmatch=0;
                             temp_count++;
-                            sprintf(result+resultp,"%s","    ");
-                            sprintf(result+resultp+4,"%s","    ");
-                            sprintf(result+resultp,"%d",A);
-                            sprintf(result+resultp+4,"%d",B);
-/*                            for(int t=0;t<4;t++)
+                            for(int t=0;t<4;t++)
                                 *(result+resultp+t)=*(bufblks+si*8+t);
                             resultp+=4;
                             for(int t=0;t<4;t++)
                                 *(result+resultp+t)=*(bufblks+si*8+4+t);
-*/
-                            resultp+=8;
+                            resultp+=4;
                             if(resultp==56)//满64写回，后继块地址呢？
                             {
-                                RBLK=ReLoadResult(buf,result,&RBLK);
+                                RBLK=ReLoadResult_abc(buf,result,&RBLK);
                                 resultp=0;
                             }
                         }//if(A==B&&C==D)
@@ -697,7 +701,7 @@ int AND(Buffer *buf,TempArray *temp){
             }//6blks of r
             freeBlockInBuffer(bufblks,buf);
         }//if s_next!=0;
-        for(int f=0;f<j;f++)
+        for(int f=0;f<6;f++)
         {
             freeBlockInBuffer(bufblkr[f],buf);
         }
@@ -707,19 +711,17 @@ int AND(Buffer *buf,TempArray *temp){
     {
         for(int t=0;resultp+t<buf->blkSize;t++)
             *(result+resultp+t)=0;//stuff with 0(ascii)
-        RBLK=ReLoadResult(buf,result,&RBLK);
+        RBLK=ReLoadResult_abc(buf,result,&RBLK);
         resultp=0;
     }
-    freeBlockInBuffer(result,buf);
-    return temp_count;
 }
 
 int cha(Buffer *buf,TempArray *temp,int outchoose)
 {
     int cnt=0;
+    AND(buf,temp);
     int R_next=1;
     int A,B,flag;
-    int temp_count=AND(buf,temp);
     int turn=(16%7==0)?16/7:16/7+1;
     unsigned char *result,*bufblkr[10];
 	unsigned int resultp=0,RBLK=2222;
@@ -777,7 +779,7 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
                    // printf("\nA:%s\nB:%s",*(result+resultp-8),*(result+resultp-4));
                     if(resultp==56)//满64写回，后继块地址呢？
                     {
-                        RBLK=ReLoadResult(buf,result,&RBLK);
+                        RBLK=ReLoadResult_abc(buf,result,&RBLK);
                         resultp=0;
                     }
                 }
@@ -792,7 +794,7 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
     {
         for(int t=0;resultp+t<buf->blkSize;t++)
             *(result+resultp+t)=0;//stuff with 0(ascii)
-        RBLK=ReLoadResult(buf,result,&RBLK);
+        RBLK=ReLoadResult_abc(buf,result,&RBLK);
         resultp=0;
     }
     printf("\n____%d_____cnt\n",cnt);}
@@ -808,7 +810,6 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
     resultp=0;
     turn=(32%7==0)?32/7:32/7+1;
     printf("\nS-R\n");
-    cnt=0;
     for(int r=0;r<turn;r++)
     {
         for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
@@ -851,28 +852,28 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
                    // printf("\nA:%s\nB:%s",*(result+resultp-8),*(result+resultp-4));
                     if(resultp==56)//满64写回，后继块地址呢？
                     {
-                        RBLK=ReLoadResult(buf,result,&RBLK);
+                        RBLK=ReLoadResult_abc(buf,result,&RBLK);
                         resultp=0;
                     }
                 }
             }
-        for(int f=0;f<j;f++)
+        }
+        for(int f=0;f<7;f++)
         {
             freeBlockInBuffer(bufblkr[f],buf);
-        }
         }
     }
     if(resultp!=0)
     {
         for(int t=0;resultp+t<buf->blkSize;t++)
             *(result+resultp+t)=0;//stuff with 0(ascii)
-        RBLK=ReLoadResult(buf,result,&RBLK);
+        RBLK=ReLoadResult_abc(buf,result,&RBLK);
         resultp=0;
     }
 	printf("\n-------%d--------\n",cnt);}
 	else
         printf("\nerror choice!\n");
-    freeBlockInBuffer(result,buf);
+
 }
 
 int unionsr(Buffer *buf,TempArray *temp)
@@ -884,20 +885,20 @@ int unionsr(Buffer *buf,TempArray *temp)
 int main()
 {
     Buffer *buf;
-    TempArray temp[1000];
+    TempArray *temp;
     unsigned char *blk;
     if (!(buf=initBuffer(520, 64, &buf)))
     {
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
-    //temp=(TempArray *)malloc(sizeof(TempArray)*100);
-    //memset(temp, 0, sizeof(TempArray)*100);
+    temp=(TempArray *)malloc(sizeof(TempArray)*100);
+    memset(temp, 0, sizeof(TempArray)*100);
     //ProRA(&buf);
     //unionsr(&buf,temp);
-    AND(&buf,temp);
+    //AND(&buf,temp);
 	//cha(&buf,temp,-1);
-	//LinearSearch(&buf,7,-1);
+	//LinearSearch(&buf,7,-1,temp);
 	//sortinside(&buf,1);
 	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
