@@ -53,6 +53,21 @@ int ReLoadResult(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     return *RBLK;
 }
 
+int ReLoadResult_3(Buffer *buf,unsigned char *result,unsigned int* RBLK)
+{//从result写到RBLK
+   // printf("blocksize:%d",buf->blkSize);
+    sprintf(result+60,"%d",*(RBLK)+1);
+    if(writeBlockToDisk(result,*(RBLK),buf)!=0)
+    {
+        perror("Writing Block Failed!\n");
+        return -1;
+    }
+    (*RBLK)+=1;
+    freeBlockInBuffer(result,buf);
+    result=getNewBlockInBuffer(buf);
+    return *RBLK;
+}
+
 int NestLoopJoin(Buffer *buf)
 {//R:S:result---6:1:1
     int S_next=20,A,B,temp_count;
@@ -586,6 +601,7 @@ int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
     return result[0].fsttmmatch;
 }
 
+
 int IndexSearch(Buffer *buf,int choose,int value)
 {
     //TempArray *datas=SortByTemp(buf,choose);
@@ -648,6 +664,205 @@ int IndexSearch(Buffer *buf,int choose,int value)
     }
 }
 
+int SortMergeJoin(Buffer *buf)
+{
+    MergeSortPlus(buf,0);
+    MergeSortPlus(buf,1);
+    char *blkr,*blks;
+    const int VERYLARGE=1000;
+    TempArray now[10];
+    int nown,cnt=0;
+    int R_next=1000,S_next=1050,R,S,RBLK=1500;
+    if((blkr=readBlockFromDisk(R_next,buf))==NULL)
+    {
+        printf("Reading block failed!\n");
+        return -1;
+    }
+    if((blks=readBlockFromDisk(S_next,buf))==NULL)
+    {
+        printf("Reading block failed!\n");
+        return -1;
+    }
+    R_next++;
+    S_next++;
+    int tupler=0,tuples=0,resultp=0;
+    char * result=getNewBlockInBuffer(buf);
+    while(R!=VERYLARGE||S!=VERYLARGE)
+    {
+        if(R!=VERYLARGE)
+        R=ReadFourBytes(blkr+tupler*8);
+        if(S!=VERYLARGE)
+        S=ReadFourBytes(blks+tuples*8);
+        if(R<S)
+        {
+            if(R==now[0].a)
+            {
+                for(int x=0;x<nown;x++)
+                {
+                    for(int m=0;m<4;m++)
+                        *(result+resultp+m)=*(blkr+tupler*8+m);
+                    printf("\n%d==",ReadFourBytes(result+resultp));
+                    resultp+=4;
+                    for(int m=0;m<4;m++)
+                        *(result+resultp+m)=*(blkr+tupler*8+4+m);
+                    printf("%d==",ReadFourBytes(result+resultp));
+                    resultp+=4;
+                    sprintf(result+resultp,"%d",now[x].b);
+                    printf("%d\n",ReadFourBytes(result+resultp));
+                    resultp+=4;
+                    if(resultp>=60)
+                    {RBLK=ReLoadResult_3(buf,result,&RBLK);
+                    resultp=0;}
+                }
+                tupler++;
+                if(tupler>=7)
+                {
+                    if(R_next<1016)
+                    {
+                        freeBlockInBuffer(blkr,buf);
+                        if((blkr=readBlockFromDisk(R_next,buf))==NULL)
+                        {
+                            printf("Reading block failed!\n");
+                            return -1;
+                        }
+                        R_next++;
+                    }
+                    else
+                    {
+                        R=VERYLARGE;
+                    }
+                    tupler=0;
+                }
+            }
+            else
+            {
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blkr+tupler*8+m);
+                resultp+=4;
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blkr+tupler*8+4+m);
+                resultp+=4;
+                sprintf(result+resultp,"%d",-1);//用-1代表空值
+                resultp+=4;
+                if(resultp>=60)
+                    {RBLK=ReLoadResult_3(buf,result,&RBLK);
+                    resultp=0;}
+                tupler++;
+                if(tupler>=7)
+                {
+                    if(R_next<1016)
+                    {
+                        freeBlockInBuffer(blkr,buf);
+                        if((blkr=readBlockFromDisk(R_next,buf))==NULL)
+                        {
+                            printf("Reading block failed!\n");
+                            return -1;
+                        }
+                        R_next++;
+                    }
+                    else
+                    {
+                        R=VERYLARGE;
+                    }
+                    tupler=0;
+                }
+            }
+        }
+            else if(R>S)
+            {
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blks+tuples*8+m);
+                resultp+=4;
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blks+tuples*8+4+m);
+                resultp+=4;
+                sprintf(result+resultp,"%d",-1);//用-1代表空值
+                resultp+=4;
+                if(resultp>=60)
+                    {RBLK=ReLoadResult_3(buf,result,&RBLK);resultp=0;}
+                tuples++;
+                if(tuples>=7)
+                {
+                    if(S_next<1082)
+                    {
+                        freeBlockInBuffer(blks,buf);
+                        if((blks=readBlockFromDisk(S_next,buf))==NULL)
+                        {
+                            printf("Reading block failed!\n");
+                            return -1;
+                        }
+                        S_next++;
+                    }
+                    else
+                    {
+                        S=VERYLARGE;
+                    }
+                    tuples=0;
+                }
+            }
+        else if(R==S)
+        {
+            cnt++;
+            int n=0;
+            printf("\n%d___%d\n",R,S);
+            nown=0;
+            while((n=ReadFourBytes(blks+tuples*8))==R)
+            {
+                now[nown].a=n;now[nown].b=ReadFourBytes(blks+tuples*8+4);nown++;tuples++;
+                if(tuples>=7)
+                {
+                    if(S_next<1082)
+                    {
+                        if((blks=readBlockFromDisk(S_next,buf))==NULL)
+                        {
+                            printf("Reading block failed!\n");
+                            return -1;
+                        }
+                        S_next++;
+                    }
+                    else
+                    {
+                        S=VERYLARGE;
+                    }
+                    tuples=0;
+                }
+            }
+            for(int x=0;x<nown;x++)
+            {
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blkr+tupler*8+m);
+                resultp+=4;
+                for(int m=0;m<4;m++)
+                    *(result+resultp+m)=*(blkr+tupler*8+4+m);
+                resultp+=4;
+                sprintf(result+resultp,"%d",now[x].b);
+                resultp+=4;
+                if(resultp>=60)
+                    {RBLK=ReLoadResult_3(buf,result,&RBLK);resultp=0;}
+            }
+            tupler++;
+            if(tupler>=7)
+            {
+                if(R_next<1032)
+                {
+                    freeBlockInBuffer(blkr,buf);
+                    if((blkr=readBlockFromDisk(R_next,buf))==NULL)
+                    {
+                        printf("Reading block failed!\n");
+                        return -1;
+                    }
+                    R_next++;
+                }
+                else
+                {
+                    S=VERYLARGE;
+                }
+                tupler=0;
+            }
+        }
+    }
+    printf("\n_________________%d_______________\n",cnt);
+}
 
 int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
 {
@@ -1102,12 +1317,13 @@ int main()
 	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
-	//MergeSortPlus(&buf,0);
-	int value;
+	//MergeSortPlus(&buf,1);
+	/*int value;
 	scanf("%d",&value);
-/*	BinarySearch(&buf,0,value);*/
+	BinarySearch(&buf,0,value);*/
+	SortMergeJoin(&buf);
 	//SortByTemp(buf,0);
 	//BinarySearchByTemp(buf,0,32);
-	IndexSearch(buf,0,value);
+//	IndexSearch(buf,0,value);
 	return 0;
 }
