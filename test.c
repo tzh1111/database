@@ -585,29 +585,68 @@ int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
     printf("%d",cnt);
     return result[0].fsttmmatch;
 }
-/*
+
 int IndexSearch(Buffer *buf,int choose,int value)
 {
-    TempArray *datas=SortByTemp(buf,choose);
-    int index[20];
-    int all=0,i=0;
-    for(all=0;datas[all].a!=-1;all++);
-    for(i=0;i<datas[all-1].a;i++)
+    //TempArray *datas=SortByTemp(buf,choose);
+    MergeSortPlus(buf,choose);
+    int index[40],r=0;
+    char *blk;
+    TempArray result[30];
+    int all=0,next=0,k=0;
+    if(choose==0)
+    {all=16;next=1000;}
+    else
+    {all=32;next=1050;}
+    for(int i=next,cnt=0;i<next+all;i++)
     {
-        index[i]=datas[5*i].a;
+        if((blk=readBlockFromDisk(i,buf))==NULL)
+        {
+            printf("Reading block failed!\n");
+            return -1;
+        }
+        index[cnt]=ReadFourBytes(blk);
+        cnt++;
+        freeBlockInBuffer(blk,buf);
     }
-    for(int j=all-1;j>0;j--)
-    {
-        if(value>=index[j/5])
-            break;
-    }
-    if(value<datas[0])
+    if(value<index[0])
         printf("cannot find!");
     else
     {
-
+        k=0;
+        while((k<all)&&(value>index[k]))
+            k++;
+        k--;//从这块开始可能有value出现
     }
-}*/
+    blk=readBlockFromDisk(k+next,buf);
+    for(int tuple=0;tuple<7;tuple++)
+    {
+        if(ReadFourBytes(blk+tuple*8)==value)
+        {
+            result[r].a=value;
+            result[r].b=ReadFourBytes(blk+tuple*8+4);
+            r++;
+        }
+        if(tuple==6)
+        {
+            k++;
+            if(index[k]<=value)
+            {
+                tuple=-1;
+                freeBlockInBuffer(blk,buf);
+                blk=readBlockFromDisk(k+next,buf);
+            }
+            else
+                break;
+        }
+    }
+    freeBlockInBuffer(blk,buf);
+    printf("\nresult:\n");
+    for(int m=0;m<r;m++)
+    {
+        printf("\n%d___%d\n",result[m].a,result[m].b);
+    }
+}
 
 
 int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
@@ -1057,18 +1096,18 @@ int main()
     //ProRA(&buf);
     //unionsr(&buf,temp);
     //AND(&buf,temp);
-	cha(&buf,-1);
+	//cha(&buf,-1);
 	//LinearSearch(&buf,7,-1,temp);
 	//sortinside(&buf,1);
 	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
 	//MergeSortPlus(&buf,0);
-	/*int value;
+	int value;
 	scanf("%d",&value);
-	BinarySearch(&buf,0,value);*/
+/*	BinarySearch(&buf,0,value);*/
 	//SortByTemp(buf,0);
 	//BinarySearchByTemp(buf,0,32);
-	//IndexSearch(buf,0,32);
+	IndexSearch(buf,0,value);
 	return 0;
 }
