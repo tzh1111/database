@@ -789,8 +789,9 @@ int ProRA(Buffer *buf)//2:5:1
 }
 
 
-int AND(Buffer *buf,TempArray *temp){
-    temp_count=0;
+TempArray * AND(Buffer *buf){
+    int temp_count=0;
+    TempArray temp[100];
 	const int turn=(16%6==0)?16/6:16/6+1;
 	unsigned char *bufblkr[10],*bufblks, *result;
 	unsigned int resultp=0;
@@ -870,12 +871,18 @@ int AND(Buffer *buf,TempArray *temp){
         RBLK=ReLoadResult_abc(buf,result,&RBLK);
         resultp=0;
     }
+    temp[temp_count].a=-1;
+    return temp;
 }
 
-int cha(Buffer *buf,TempArray *temp,int outchoose)
+int cha(Buffer *buf,int outchoose)
 {
-    int cnt=0;
-    AND(buf,temp);
+    int cnt=0,all=0;
+    TempArray *temp,t[100];
+    temp=AND(buf);
+    for(all=0;temp[all].a!=-1;all++);
+    for(int x=0;x<100;x++)
+    {t[x].fsttmmatch=0;t[x].b=temp[x].b;t[x].a=temp[x].a;}
     int R_next=1;
     int A,B,flag;
     int turn=(16%7==0)?16/7:16/7+1;
@@ -910,15 +917,15 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
             {
                 A=ReadFourBytes(bufblkr[j]+ri*8);
                 B=ReadFourBytes(bufblkr[j]+ri*8+4);
-                for(int i=0;i<temp_count;i++)
+                for(int i=0;i<all;i++)
                 {
-                    flag=0;
-                    if(temp[i].a==A&&temp[i].b==B&&temp[i].fsttmmatch==0)
+                    flag=1;
+                    if((t[i].a==A)&&(t[i].b==B)&&(t[i].fsttmmatch==0))
                     {
-                        temp[i].fsttmmatch=1;
                         cnt++;
                         printf("\n=====%d:%d=====%d:%d====\n",temp[i].a,temp[i].b,A,B);
-                        flag=1;//no write
+                        flag=0;//no write
+                        t[i].fsttmmatch=-1;
                         break;
                     }
                 }
@@ -940,10 +947,7 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
                     }
                 }
             }
-        }
-        for(int f=0;f<7;f++)
-        {
-            freeBlockInBuffer(bufblkr[f],buf);
+            freeBlockInBuffer(bufblkr[j],buf);
         }
     }
     if(resultp!=0)
@@ -968,7 +972,7 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
     printf("\nS-R\n");
     for(int r=0;r<turn;r++)
     {
-        for (int j = 0; j<7&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
+        for (int j = 0; j<6&&R_next!=0; ++j)//READ 7 BLKS FROM DISK EACH TIME
         {
             //WHERE READ FROM DISK,
             //AUTOMATICALLY GET NEW BLK FROM BUF
@@ -983,13 +987,13 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
             {
                 A=ReadFourBytes(bufblkr[j]+ri*8);
                 B=ReadFourBytes(bufblkr[j]+ri*8+4);
-                for(int i=0;i<temp_count;i++)
+                for(int i=0;i<all;i++)
                 {
                     flag=0;
-                    if(temp[i].a==A&&temp[i].b==B&&temp[i].fsttmmatch==0)
+                    if((t[i].a==A)&&(t[i].b==B)&&(t[i].fsttmmatch==0))
                     {
-                        temp[i].fsttmmatch=1;
-                        printf("\n=====%d:%d=====%d:%d====\n",temp[i].a,temp[i].b,A,B);
+                        t[i].fsttmmatch=-1;
+                        printf("\n=====%d:%d=====%d:%d====\n",t[i].a,t[i].b,A,B);
                         cnt++;
                         flag=1;//no write
                         break;
@@ -1032,9 +1036,9 @@ int cha(Buffer *buf,TempArray *temp,int outchoose)
 
 }
 
-int unionsr(Buffer *buf,TempArray *temp)
+int unionsr(Buffer *buf)
 {
-    cha(buf,temp,1);
+    cha(buf,1);
     printf("\nresult in : (blk1:blk16)+(blk3333:)\n");
 }
 
@@ -1048,18 +1052,18 @@ int main()
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
-    temp=(TempArray *)malloc(sizeof(TempArray)*100);
-    memset(temp, 0, sizeof(TempArray)*100);
+    /*temp=(TempArray *)malloc(sizeof(TempArray)*100);
+    memset(temp, 0, sizeof(TempArray)*100);*/
     //ProRA(&buf);
     //unionsr(&buf,temp);
     //AND(&buf,temp);
-	//cha(&buf,temp,-1);
+	cha(&buf,-1);
 	//LinearSearch(&buf,7,-1,temp);
 	//sortinside(&buf,1);
 	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
 	//printf("io´ÎÊý£º%l",buf->numIO);
-	MergeSortPlus(&buf,0);
+	//MergeSortPlus(&buf,0);
 	/*int value;
 	scanf("%d",&value);
 	BinarySearch(&buf,0,value);*/
