@@ -232,8 +232,10 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
     const int VERYLARGE=10000;
     int TotalBlkInRoad[10],NowBlkInRoad[10],TupleInRoad[10],resulttuple=0;
     int R_next,Allblks,RBLK=1000;
+    char filename[40],ch;
     TempArray temp[10];
     int y;
+    unsigned char *bytePtr;
     char *BufBlkRoad[10],*result,*t[10],*x;//addr
     if(choose==0)//R
         {Allblks=16;R_next=800;RBLK=1000;}
@@ -297,13 +299,28 @@ int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
                 for(int a=0;a<7;a++)
                 {
                     t[a]=BufBlkRoad[a];
+                }//
+                sprintf(filename, "data/%d.blk", R_next+minroad*7+NowBlkInRoad[minroad]);
+                FILE *fp = fopen(filename, "r");
+                if (!fp)
+                {
+                    perror("Reading Block Failed!\n");
+                    return NULL;
                 }
-                if((x=readBlockFromDisk(R_next+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
+                bytePtr = BufBlkRoad[minroad];
+                while (bytePtr < BufBlkRoad[minroad] + buf->blkSize)
+                {
+                    ch = fgetc(fp);
+                    *bytePtr = ch;
+                    bytePtr++;
+                }
+                fclose(fp);
+                /*if((x=readBlockFromDisk(R_next+minroad*7+NowBlkInRoad[minroad],buf))==NULL)
                 {
                     printf("Reading block failed!\n");
                     return -1;
                 }
-                 BufBlkRoad[minroad]=x;
+                 BufBlkRoad[minroad]=x;*/
                 for(int a=0;a<7;a++)
                 {
                     if((t[a]!=BufBlkRoad[a])&&(a!=minroad))
@@ -568,7 +585,7 @@ int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
     printf("%d",cnt);
     return result[0].fsttmmatch;
 }
-
+/*
 int IndexSearch(Buffer *buf,int choose,int value)
 {
     TempArray *datas=SortByTemp(buf,choose);
@@ -590,7 +607,7 @@ int IndexSearch(Buffer *buf,int choose,int value)
     {
 
     }
-}
+}*/
 
 
 int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
@@ -1042,12 +1059,12 @@ int main()
 	//MergeSort(&buf,1);
 	//NestLoopJoin(&buf);
 	//printf("io次数：%l",buf->numIO);
-	//MergeSortPlus(&buf,1);
+	MergeSortPlus(&buf,0);
 	/*int value;
 	scanf("%d",&value);
 	BinarySearch(&buf,0,value);*/
 	//SortByTemp(buf,0);
 	//BinarySearchByTemp(buf,0,32);
-	IndexSearch(buf,0,32);
+	//IndexSearch(buf,0,32);
 	return 0;
 }
