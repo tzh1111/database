@@ -601,7 +601,6 @@ int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
     return result[0].fsttmmatch;
 }
 
-
 int IndexSearch(Buffer *buf,int choose,int value)
 {
     //TempArray *datas=SortByTemp(buf,choose);
@@ -864,6 +863,136 @@ int SortMergeJoin(Buffer *buf)
     printf("\n_________________%d_______________\n",cnt);
 }
 
+
+int HashJoin(Buffer *buf)
+{//5块hash，1块S，1块result，1块给刚读进来未处理的R块
+    int turn=((16%5==0)?16/5:(16/5+1));
+    char *hashblk[10],*newinr;
+    char *result,*blks;
+    int resultp=0,RBLK=6000;
+    int R_next=1,bkttuple[10];
+    for(int blki=0;blki<5;blki++)
+    {
+        hashblk[blki]=getNewBlockInBuffer(buf);
+        bkttuple[blki]=0;
+    }
+    int r=R_next,newintuple=0;
+    result=getNewBlockInBuffer(buf);
+    newinr=readBlockFromDisk(r,buf);
+    r++;
+    while(r<=16)
+    {
+        int A,B;
+        A=ReadFourBytes(newinr+newintuple*8);
+        B=ReadFourBytes(newinr+newintuple*8+4);
+        sprintf(hashblk[A%5]+bkttuple[A%5]*8,"%d",A);
+        sprintf(hashblk[A%5]+bkttuple[A%5]*8+4,"%d",B);
+        bkttuple[A%5]++;
+        if(bkttuple[A%5]>=7)
+        {
+            for(int i=0;i<5;i++)
+            {
+                printf("\nsee: what is that in bucket %d",i);
+                for(int j=0;j<bkttuple[i];j++)
+                {
+                    printf("%d___%d",ReadFourBytes(hashblk[i]+j*8),ReadFourBytes(hashblk[i]+j*8));
+                }
+            }
+            //check and clear_hashblks;
+            for(int s=20;s<52;s++)//check
+            {
+                if((blks=readBlockFromDisk(s,buf))==NULL)
+                {
+                    printf("Reading block failed!\n");
+                    return -1;
+                }
+                for(int tuples=0;tuples<7;tuples++)
+                {
+                    int C,D;
+                    C=ReadFourBytes(blks+tuples*8);
+                    if(C==47)
+                        printf("---===---");
+                    D=ReadFourBytes(blks+tuples*8+4);
+                    int bkt=C%5,n=0;
+                    for(int bkti=0;bkti<bkttuple[bkt];bkti++)
+                    {
+                        if((n=ReadFourBytes(hashblk[bkt]+bkti*8))==C)
+                        {
+                            sprintf(result+resultp,"%d",n);
+                            resultp+=4;
+                            sprintf(result+resultp,"%d",ReadFourBytes(hashblk[bkt]+bkti*8+4));
+                            resultp+=4;
+                            sprintf(result+resultp,"%d",D);
+                            resultp+=4;
+                            if(resultp>=60)
+                            {
+                                RBLK=ReLoadResult_3(buf,result,&RBLK);
+                                resultp=0;
+                            }
+                        }
+                    }
+                }
+                freeBlockInBuffer(blks,buf);
+            }//check
+            for(int blki=0;blki<6;blki++)
+            {
+                bkttuple[blki]=0;
+            }
+        }
+        newintuple++;
+        if(newintuple>=7)
+        {
+            if(r>16)//check and break;
+            {
+                for(int s=20;s<52;s++)//check
+                {
+                    if((blks=readBlockFromDisk(s,buf))==NULL)
+                    {
+                        printf("Reading block failed!\n");
+                        return -1;
+                    }
+                    for(int tuples=0;tuples<7;tuples++)
+                    {
+                        int C,D;
+                        C=ReadFourBytes(blks+tuples*8);
+                        if(C==47)
+                            printf("---===---");
+                        D=ReadFourBytes(blks+tuples*8+4);
+                        int bkt=C%5,n=0;
+                        for(int bkti=0;bkti<bkttuple[bkt];bkti++)
+                        {
+                            if((n=ReadFourBytes(hashblk[bkt]+bkti*8))==C)
+                            {
+                                sprintf(result+resultp,"%d",n);
+                                resultp+=4;
+                                sprintf(result+resultp,"%d",ReadFourBytes(hashblk[bkt]+bkti*8+4));
+                                resultp+=4;
+                                sprintf(result+resultp,"%d",D);
+                                resultp+=4;
+                                if(resultp>=60)
+                                {
+                                    RBLK=ReLoadResult_3(buf,result,&RBLK);
+                                    resultp=0;
+                                }
+                            }
+                        }
+                    }
+                    freeBlockInBuffer(blks,buf);
+                }//check
+                break;
+            }
+            freeBlockInBuffer(newinr,buf);
+            if((newinr=readBlockFromDisk(r,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            r++;
+            newintuple=0;
+        }
+    }
+}
+
 int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
 {
     int R_next=1,resultp=0,rblk=0,A=0,RBLK=5555;
@@ -1041,7 +1170,6 @@ int ProRA(Buffer *buf)//2:5:1
         freeBlockInBuffer(bufblktemp[f],buf);
     }
 }
-
 
 TempArray * AND(Buffer *buf){
     int temp_count=0;
@@ -1321,7 +1449,8 @@ int main()
 	/*int value;
 	scanf("%d",&value);
 	BinarySearch(&buf,0,value);*/
-	SortMergeJoin(&buf);
+	//SortMergeJoin(&buf);
+	HashJoin(&buf);
 	//SortByTemp(buf,0);
 	//BinarySearchByTemp(buf,0,32);
 //	IndexSearch(buf,0,value);
