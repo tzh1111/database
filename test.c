@@ -68,7 +68,49 @@ int ReLoadResult_3(Buffer *buf,unsigned char *result,unsigned int* RBLK)
     return *RBLK;
 }
 
-int NestLoopJoin(Buffer *buf)
+int LinearSearch_in(Buffer *buf, int blkforr, int value, TempArray *temp)//ok
+{
+    int R_next=1,resultp=0,rblk=0,A=0,RBLK=5555;
+    const int turn=(16%blkforr==0)?16/blkforr:16/blkforr+1;
+    unsigned char *bufblkr[10];
+    int temp_count=0;
+    for(int turni=0;turni<turn;turni++)
+    {
+        for(rblk=0;rblk<blkforr&&R_next!=0;rblk++)
+        {
+            //printf("R_next:%d\n",R_next);
+			if((bufblkr[rblk]=readBlockFromDisk(R_next,buf))==NULL)
+            {
+                printf("Reading block failed!\n");
+                return -1;
+            }
+            R_next=ReadFourBytes(bufblkr[rblk]+56);
+        }//read 7 blks of r, rest 1 blk be result
+        for(int rblki=0;rblki<rblk;rblki++)
+        {
+            for(int rtuple=0;rtuple<7;rtuple++)
+            {
+                A=ReadFourBytes(bufblkr[rblki]+rtuple*8);
+                if(A==value)
+                {
+                    temp[temp_count].a=A;
+                    temp[temp_count].b=ReadFourBytes(bufblkr[rblki]+rtuple*8+4);
+                    temp_count++;
+                }
+            }
+        }
+        //free 7 blks
+        for(int f=0;f<rblk;f++)
+        {
+            freeBlockInBuffer(bufblkr[f],buf);
+        }
+    }
+    //store the left results
+    //free result blk
+    return temp_count;
+}
+
+int NestLoopJoin(Buffer *buf)//好了，不要动
 {//R:S:result---6:1:1
     int S_next=20,A,B,temp_count;
     unsigned char *bufblks,*result;
@@ -87,8 +129,10 @@ int NestLoopJoin(Buffer *buf)
         for(int tuple=0;tuple<7;tuple++)
         {
              A=ReadFourBytes(bufblks+tuple*8);
-             B=ReadFourBytes(bufblks+tuple*8+2);
-             temp_count=LinearSearch(buf,5,A,temp);
+             B=ReadFourBytes(bufblks+tuple*8+4);
+             temp_count=LinearSearch_in(buf,5,A,temp);
+             if(temp_count==0)
+                continue;
              for(int tempi=0;tempi<temp_count;tempi++)
              {
                  sprintf(result+12*resulti,"%d",A);//resulti:0-4
@@ -97,7 +141,7 @@ int NestLoopJoin(Buffer *buf)
                  resulti++;
                  if(resulti>=5)
                  {
-                     RBLK=ReLoadResult(buf,result,&RBLK);
+                     RBLK=ReLoadResult_3(buf,result,&RBLK);
                      resulti=0;
                  }
              }
@@ -241,7 +285,7 @@ int MergeSort(Buffer *buf,int choose)//ok(800/850)
     freeBlockInBuffer(bufblkresult,buf);
 }
 
-int MergeSortPlus(Buffer *buf,int choose)//每条路上一般有7块了，或者更少
+int MergeSortPlus(Buffer *buf,int choose)//ok//每条路上一般有7块了，或者更少
 {//记录每条路上总共的块数，每条路上现在的块号，现在存在temp里的tuple，最后落实到tuple
     //tuple结束换下一个tuple，若下一个tuple=8，换下一个块，若下一个块大于等于总共块数量，置这一路为无穷大
     const int VERYLARGE=10000;
@@ -499,7 +543,6 @@ int BinarySearch(Buffer *buf,int choose,int value)
     }
 }
 
-
 TempArray * SortByTemp(Buffer *buf,int choose)//ok
 {
     TempArray datas[300];
@@ -548,8 +591,18 @@ TempArray * SortByTemp(Buffer *buf,int choose)//ok
     return datas;
 }
 
-int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
+int BinarySearchByTemp(Buffer *buf)//ok
 {
+    int choose,turn,value;
+    printf("\nin 0/1:R/S, please choose:\n");
+    scanf("%d",&choose);
+    if((choose!=0)&&(choose!=1))
+    {
+        printf("\nerror choice!\n");
+        return 0;
+    }
+    printf("\ninput value:");
+    scanf("%d",&value);
     TempArray *datas=SortByTemp(buf,choose);
     TempArray result[30];
     int i=0;
@@ -595,15 +648,25 @@ int BinarySearchByTemp(Buffer *buf,int choose,int value)//ok
     }
     for(int x=0;x<cnt;x++)
     {
-        printf("\n%d,%d,%d\n",result[x].a,result[x].b,result[x].fsttmmatch);
+        printf("\n%d,%d\n",result[x].a,result[x].b);
     }
-    printf("%d",cnt);
+    printf("find %d matches.",cnt);
     return result[0].fsttmmatch;
 }
 
-int IndexSearch(Buffer *buf,int choose,int value)
+int IndexSearch(Buffer *buf)
 {
     //TempArray *datas=SortByTemp(buf,choose);
+    int choose,value;
+    printf("\nin 0/1:R/S, please choose:\n");
+    scanf("%d",&choose);
+    if((choose!=0)&&(choose!=1))
+    {
+        printf("\nerror choice!\n");
+        return 0;
+    }
+    printf("\ninput value:");
+    scanf("%d",&value);
     MergeSortPlus(buf,choose);
     int index[40],r=0;
     char *blk;
@@ -663,7 +726,7 @@ int IndexSearch(Buffer *buf,int choose,int value)
     }
 }
 
-int SortMergeJoin(Buffer *buf)
+int SortMergeJoin(Buffer *buf)//1500//ok
 {
     MergeSortPlus(buf,0);
     MergeSortPlus(buf,1);
@@ -700,14 +763,14 @@ int SortMergeJoin(Buffer *buf)
                 {
                     for(int m=0;m<4;m++)
                         *(result+resultp+m)=*(blkr+tupler*8+m);
-                    printf("\n%d==",ReadFourBytes(result+resultp));
+                    //printf("\n%d==",ReadFourBytes(result+resultp));
                     resultp+=4;
                     for(int m=0;m<4;m++)
                         *(result+resultp+m)=*(blkr+tupler*8+4+m);
-                    printf("%d==",ReadFourBytes(result+resultp));
+                   // printf("%d==",ReadFourBytes(result+resultp));
                     resultp+=4;
                     sprintf(result+resultp,"%d",now[x].b);
-                    printf("%d\n",ReadFourBytes(result+resultp));
+                    //printf("%d\n",ReadFourBytes(result+resultp));
                     resultp+=4;
                     if(resultp>=60)
                     {RBLK=ReLoadResult_3(buf,result,&RBLK);
@@ -735,17 +798,6 @@ int SortMergeJoin(Buffer *buf)
             }
             else
             {
-                for(int m=0;m<4;m++)
-                    *(result+resultp+m)=*(blkr+tupler*8+m);
-                resultp+=4;
-                for(int m=0;m<4;m++)
-                    *(result+resultp+m)=*(blkr+tupler*8+4+m);
-                resultp+=4;
-                sprintf(result+resultp,"%d",-1);//用-1代表空值
-                resultp+=4;
-                if(resultp>=60)
-                    {RBLK=ReLoadResult_3(buf,result,&RBLK);
-                    resultp=0;}
                 tupler++;
                 if(tupler>=7)
                 {
@@ -769,16 +821,6 @@ int SortMergeJoin(Buffer *buf)
         }
             else if(R>S)
             {
-                for(int m=0;m<4;m++)
-                    *(result+resultp+m)=*(blks+tuples*8+m);
-                resultp+=4;
-                for(int m=0;m<4;m++)
-                    *(result+resultp+m)=*(blks+tuples*8+4+m);
-                resultp+=4;
-                sprintf(result+resultp,"%d",-1);//用-1代表空值
-                resultp+=4;
-                if(resultp>=60)
-                    {RBLK=ReLoadResult_3(buf,result,&RBLK);resultp=0;}
                 tuples++;
                 if(tuples>=7)
                 {
@@ -803,7 +845,7 @@ int SortMergeJoin(Buffer *buf)
         {
             cnt++;
             int n=0;
-            printf("\n%d___%d\n",R,S);
+            //printf("\n%d___%d\n",R,S);
             nown=0;
             while((n=ReadFourBytes(blks+tuples*8))==R)
             {
@@ -860,23 +902,21 @@ int SortMergeJoin(Buffer *buf)
             }
         }
     }
-    printf("\n_________________%d_______________\n",cnt);
+   // printf("\n_________________%d_______________\n",cnt);
 }
 
-
-int HashJoin(Buffer *buf)
+int HashJoin(Buffer *buf)//6000
 {//5块hash，1块S，1块result，1块给刚读进来未处理的R块
-    int turn=((16%5==0)?16/5:(16/5+1));
     char *hashblk[10],*newinr;
     char *result,*blks;
     int resultp=0,RBLK=6000;
-    int R_next=1,bkttuple[10];
+    int bkttuple[10];
     for(int blki=0;blki<5;blki++)
     {
         hashblk[blki]=getNewBlockInBuffer(buf);
         bkttuple[blki]=0;
     }
-    int r=R_next,newintuple=0;
+    int r=1,newintuple=0;
     result=getNewBlockInBuffer(buf);
     newinr=readBlockFromDisk(r,buf);
     r++;
@@ -885,19 +925,21 @@ int HashJoin(Buffer *buf)
         int A,B;
         A=ReadFourBytes(newinr+newintuple*8);
         B=ReadFourBytes(newinr+newintuple*8+4);
+        //if(A==60)
+        //printf("\n---\n");
         sprintf(hashblk[A%5]+bkttuple[A%5]*8,"%d",A);
         sprintf(hashblk[A%5]+bkttuple[A%5]*8+4,"%d",B);
         bkttuple[A%5]++;
         if(bkttuple[A%5]>=7)
         {
-            for(int i=0;i<5;i++)
+            /*for(int i=0;i<5;i++)
             {
-                printf("\nsee: what is that in bucket %d",i);
+                printf("\nsee: what is that in bucket %d:",i);
                 for(int j=0;j<bkttuple[i];j++)
                 {
-                    printf("%d___%d",ReadFourBytes(hashblk[i]+j*8),ReadFourBytes(hashblk[i]+j*8));
+                    printf("%d___%d",ReadFourBytes(hashblk[i]+j*8),ReadFourBytes(hashblk[i]+j*8+4));
                 }
-            }
+            }*/
             //check and clear_hashblks;
             for(int s=20;s<52;s++)//check
             {
@@ -910,8 +952,8 @@ int HashJoin(Buffer *buf)
                 {
                     int C,D;
                     C=ReadFourBytes(blks+tuples*8);
-                    if(C==47)
-                        printf("---===---");
+                   /* if(C==47)
+                        printf("\n---===---\n");*/
                     D=ReadFourBytes(blks+tuples*8+4);
                     int bkt=C%5,n=0;
                     for(int bkti=0;bkti<bkttuple[bkt];bkti++)
@@ -955,8 +997,8 @@ int HashJoin(Buffer *buf)
                     {
                         int C,D;
                         C=ReadFourBytes(blks+tuples*8);
-                        if(C==47)
-                            printf("---===---");
+                       /* if(C==47)
+                            printf("---===---");*/
                         D=ReadFourBytes(blks+tuples*8+4);
                         int bkt=C%5,n=0;
                         for(int bkti=0;bkti<bkttuple[bkt];bkti++)
@@ -982,7 +1024,7 @@ int HashJoin(Buffer *buf)
                 break;
             }
             freeBlockInBuffer(newinr,buf);
-            if((newinr=readBlockFromDisk(r,buf))==NULL)
+             if((newinr=readBlockFromDisk(r,buf))==NULL)
             {
                 printf("Reading block failed!\n");
                 return -1;
@@ -993,23 +1035,36 @@ int HashJoin(Buffer *buf)
     }
 }
 
-int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
+int LinearSearch(Buffer *buf)//好了，不准动
 {
     int R_next=1,resultp=0,rblk=0,A=0,RBLK=5555;
-    const int turn=(16%blkforr==0)?16/blkforr:16/blkforr+1;
+    int turn,blkforr=7,choose,value;
     unsigned char *bufblkr[10],*result;
-    int temp_count=0;
-    if(value==-1)
+    printf("\n0/1:R/S, please choose:\n");
+    scanf("%d",&choose);
+    if(choose==0)
     {
-        printf("\ninput value:");
-        scanf("%d",&value);
+        turn=(16%blkforr==0)?16/blkforr:16/blkforr+1;
+        R_next=1;
     }
+    else if(choose==1)
+    {
+        turn=(32%blkforr==0)?32/blkforr:32/blkforr+1;
+        R_next=20;
+    }
+    else
+    {
+        printf("\nerror choice!\n");
+        return 0;
+    }
+    printf("\ninput value:");
+    scanf("%d",&value);
     result=getNewBlockInBuffer(buf);
     for(int turni=0;turni<turn;turni++)
     {
         for(rblk=0;rblk<blkforr&&R_next!=0;rblk++)
         {
-            printf("R_next:%d\n",R_next);
+            //printf("R_next:%d\n",R_next);
 			if((bufblkr[rblk]=readBlockFromDisk(R_next,buf))==NULL)
             {
                 printf("Reading block failed!\n");
@@ -1024,9 +1079,6 @@ int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
                 A=ReadFourBytes(bufblkr[rblki]+rtuple*8);
                 if(A==value)
                 {
-                    temp[temp_count].a=A;
-                    temp[temp_count].b=ReadFourBytes(bufblkr[rblki]+rtuple*8+4);
-                    temp_count++;
                     for(int m=0;m<4;m++)
                         *(result+resultp+m)=*(bufblkr[rblki]+rtuple*8+m);
                     resultp+=4;
@@ -1064,9 +1116,7 @@ int LinearSearch(Buffer *buf, int blkforr, int value, TempArray *temp)
     }
     //free result blk
     freeBlockInBuffer(result,buf);
-    return temp_count;
 }
-
 int ProRA(Buffer *buf)//2:5:1
 {
     int R_next=1,tempblk=0,flag=0,resultp=0,ri=0,ti=0,A=0,B=0,RBLK=4444;
@@ -1075,10 +1125,28 @@ int ProRA(Buffer *buf)//2:5:1
     result=getNewBlockInBuffer(buf);
     resultp=0;
     int temp_next=4444;//where results begins
-    for(int turni=0;turni<16;turni++)
+    printf("\n0/1:R/S, please choose:\n");
+    int choose,turn;
+    scanf("%d",&choose);
+    char temp[10];
+    gets(temp);
+    if(choose==0)
+    {
+        R_next=1;turn=16;
+    }
+    else if(choose==1)
+    {
+        R_next=20;turn=32;
+    }
+    else
+    {
+        printf("\nerror choice!\n");
+        return 0;
+    }
+    for(int turni=0;turni<turn;turni++)
     {
         flag=0;
-        printf("\nblki of r:%d\n",turni);
+        //printf("\nblki of r:%d\n",turni);
         if(R_next!=0)
         {//read 1 blks of R
             if((bufblkr=readBlockFromDisk(R_next,buf))==NULL)
@@ -1087,7 +1155,7 @@ int ProRA(Buffer *buf)//2:5:1
                 return -1;
             }
             R_next=ReadFourBytes(bufblkr+56);
-            printf("R_next:%d\n",R_next);
+            //printf("R_next:%d\n",R_next);
         }
         //compare 1:6 and write to result
         //--------------==B==2
@@ -1106,7 +1174,7 @@ int ProRA(Buffer *buf)//2:5:1
                     if(A==B)
                     {
                         flag=1;
-                        printf("\ncatch!%d,%d\n",A,B);
+                       // printf("\ncatch!%d,%d\n",A,B);
                         break;
                     }
                 }
@@ -1124,7 +1192,7 @@ int ProRA(Buffer *buf)//2:5:1
                 if(A==B)
                 {
                     flag=1;
-                    printf("\ncatch!%d,%d\n",A,B);
+                    //printf("\ncatch!%d,%d\n",A,B);
                     break;
                 }
             }//cmp with result
@@ -1138,7 +1206,8 @@ int ProRA(Buffer *buf)//2:5:1
                     //RBLK=ReLoadResult(buf,result,&RBLK);
                     resultp=0;
                     bufblktemp[tempblk]=result;
-                    sprintf(result+60,"%d",RBLK+1);
+                    //sprintf(result+56,"%s","  ");
+                    sprintf(result+56,"%d",RBLK+1);
                     if(writeBlockToDisk(result,RBLK,buf)!=0)
                     {
                         perror("Writing Block Failed!\n");
@@ -1190,7 +1259,7 @@ TempArray * AND(Buffer *buf){
 		{
 		    //WHERE READ FROM DISK,
 		    //AUTOMATICALLY GET NEW BLK FROM BUF
-		    printf("R_next:%d\n",R_next);
+		    //printf("R_next:%d\n",R_next);
 			if((bufblkr[j]=readBlockFromDisk(R_next,buf))==NULL)
             {
                 printf("Reading block failed!\n");
@@ -1198,10 +1267,10 @@ TempArray * AND(Buffer *buf){
             }
             R_next=ReadFourBytes(bufblkr[j]+56);
 		}
-		printf("\nj:%d\n",j);
+		//printf("\nj:%d\n",j);
 		while(S_next!=0)
         {
-            printf("S-next:%d\n",S_next);
+            //printf("S-next:%d\n",S_next);
             bufblks=readBlockFromDisk(S_next,buf);
             S_next=ReadFourBytes(bufblks+56);
             for(int r=0;r<j;r++)
@@ -1218,7 +1287,7 @@ TempArray * AND(Buffer *buf){
                      //   printf("\nC:%d,D:%d\n",C,D);
                         if(A==C&&B==D)
                         {
-                            printf("\ncache!r:%d,si:%d,____%d,%d,%d,%d\n",r,si,A,B,C,D);
+                            printf("\ncatch!%d,%d,%d,%d\n",A,B,C,D);
                             temp[temp_count].a=A;
                             temp[temp_count].b=B;
                             temp[temp_count].fsttmmatch=0;
@@ -1276,7 +1345,7 @@ int cha(Buffer *buf,int outchoose)
     {
         printf("R-S:0/S-R:1\nplease choose:");
         scanf("%d",&choose);
-        printf("\n---%d----\n",choose);
+        //printf("\n---%d----\n",choose);
     }
     else
         choose=outchoose;
@@ -1288,7 +1357,7 @@ int cha(Buffer *buf,int outchoose)
         {
             //WHERE READ FROM DISK,
             //AUTOMATICALLY GET NEW BLK FROM BUF
-            printf("R_next:%d\n",R_next);
+            //printf("R_next:%d\n",R_next);
             if((bufblkr[j]=readBlockFromDisk(R_next,buf))==NULL)
             {
                 printf("Reading block failed!\n");
@@ -1305,13 +1374,13 @@ int cha(Buffer *buf,int outchoose)
                     if((t[i].a==A)&&(t[i].b==B)&&(t[i].fsttmmatch==0))
                     {
                         cnt++;
-                        printf("\n=====%d:%d=====%d:%d====\n",temp[i].a,temp[i].b,A,B);
+                        printf("\n=====%d:%d====\n",A,B);
                         flag=0;//no write
                         t[i].fsttmmatch=-1;
                         break;
                     }
                 }
-                if(flag==0)
+                if(flag==1)
                 {
                     //writetupletoblk;
                     for(int m=0;m<4;m++)
@@ -1339,7 +1408,7 @@ int cha(Buffer *buf,int outchoose)
         RBLK=ReLoadResult_abc(buf,result,&RBLK);
         resultp=0;
     }
-    printf("\n____%d_____cnt\n",cnt);}
+    printf("\nhow many catchs here:%d\n",cnt);}
 
    // for(blk in S)
         //the same as Rs
@@ -1358,7 +1427,7 @@ int cha(Buffer *buf,int outchoose)
         {
             //WHERE READ FROM DISK,
             //AUTOMATICALLY GET NEW BLK FROM BUF
-            printf("S_next:%d\n",R_next);
+           // printf("S_next:%d\n",R_next);
             if((bufblkr[j]=readBlockFromDisk(R_next,buf))==NULL)
             {
                 printf("Reading block failed!\n");
@@ -1371,17 +1440,17 @@ int cha(Buffer *buf,int outchoose)
                 B=ReadFourBytes(bufblkr[j]+ri*8+4);
                 for(int i=0;i<all;i++)
                 {
-                    flag=0;
+                    flag=1;
                     if((t[i].a==A)&&(t[i].b==B)&&(t[i].fsttmmatch==0))
                     {
                         t[i].fsttmmatch=-1;
-                        printf("\n=====%d:%d=====%d:%d====\n",t[i].a,t[i].b,A,B);
+                        printf("\n=====%d:%d====\n",A,B);
                         cnt++;
-                        flag=1;//no write
+                        flag=0;//no write
                         break;
                     }
                 }
-                if(flag==0)
+                if(flag==1)
                 {
                     //writetupletoblk;
                     for(int m=0;m<4;m++)
@@ -1427,32 +1496,24 @@ int unionsr(Buffer *buf)
 int main()
 {
     Buffer *buf;
-    TempArray *temp;
+    TempArray temp[100];
     unsigned char *blk;
     if (!(buf=initBuffer(520, 64, &buf)))
     {
         perror("Buffer Initialization Failed!\n");
         return -1;
     }
-    /*temp=(TempArray *)malloc(sizeof(TempArray)*100);
-    memset(temp, 0, sizeof(TempArray)*100);*/
-    //ProRA(&buf);
-    //unionsr(&buf,temp);
-    //AND(&buf,temp);
-	//cha(&buf,-1);
-	//LinearSearch(&buf,7,-1,temp);
-	//sortinside(&buf,1);
-	//MergeSort(&buf,1);
-	//NestLoopJoin(&buf);
-	//printf("io次数：%l",buf->numIO);
-	//MergeSortPlus(&buf,1);
-	/*int value;
-	scanf("%d",&value);
-	BinarySearch(&buf,0,value);*/
-	//SortMergeJoin(&buf);
-	HashJoin(&buf);
-	//SortByTemp(buf,0);
-	//BinarySearchByTemp(buf,0,32);
-//	IndexSearch(buf,0,value);
+    printf("\nplease see my main(),cancel the '//' according to the note and run...\n");
+   // unionsr(&buf);//并
+   // AND(&buf);//交
+	//cha(&buf,-1);//差
+    //MergeSortPlus(&buf,0);//外排
+	 //ProRA(&buf);//投影
+	//LinearSearch(&buf);//线性查找
+	//NestLoopJoin(&buf);//nested loop join
+	//SortMergeJoin(&buf);//sort merge join
+	//HashJoin(&buf);//hash join
+	//BinarySearchByTemp(&buf);//二分查找
+	//IndexSearch(&buf);//索引查找
 	return 0;
 }
